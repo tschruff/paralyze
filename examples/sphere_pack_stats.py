@@ -7,10 +7,14 @@ import os
 import glob
 import sys
 
+from paralyze.core.algebra import AABB
+
 
 ########################################################################################################################
 # USER PARAMETERS
 ########################################################################################################################
+
+# === GENERAL ===
 
 # absolute path to input csb file(s)
 INPUT = '/Users/tobs/sciebo/Diss/Data/Packings/periodic-256/uniform-8/out_*.csv'
@@ -18,30 +22,28 @@ INPUT = '/Users/tobs/sciebo/Diss/Data/Packings/periodic-256/uniform-8/out_*.csv'
 # used to scale input to SI units, i.e. [m]
 SCALING_FACTOR = 0.001
 
+# sieves to classify the grain sizes, in mm
+SIEVES = np.arange(0.25, 64.25, 0.5)
+# SIEVES = [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
+
+DOMAIN_FILTER = '[<0, 0, 0> , <256, 256, 256>]'
+
+
+# === FIGURES ===
+
+# grain size fractions used in figures
+GSD_MODE = 'coarse'
+
 # absolute path to output folder (will be set to INPUT folder if empty)
 OUTPUT = ""
 
 # file format of output figure
 FIGURE_FORMAT = "png"
 
-# sieves to classify the grain sizes, in mm
-SIEVES = np.arange(0.25, 64.25, 0.5)
-# SIEVES = [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0]
-
-# grain size fractions used in the figures
-GSD_MODE = 'coarse'
-
-
-########################################################################################################################
-# MATPLOTLIB PARAMETERS
-########################################################################################################################
-
 # change font size and type
-p.rcParams['font.size'] = 10
-p.rcParams['font.family'] = 'Arial'
-
-# marker size
-M_SIZE = 5
+FONT_SIZE = 10
+FONT_FAMILY = 'Arial'
+MARKER_SIZE = 5
 
 
 ########################################################################################################################
@@ -187,7 +189,7 @@ else:
     sk = 0.0
 
 nobs, min_max, mean, variance, skewness, kurtosis = scipy.stats.describe(diameters)
-print('bodies   : %d' % nobs)
+print('# bodies : %d' % nobs)
 print('min. d   : %.3f mm' % (min_max[0] * 1000.0))
 print('max. d   : %.3f mm' % (min_max[1] * 1000.0))
 print('GM       : %.3f mm' % (gm * 1000.0))
@@ -196,6 +198,9 @@ print('Skewness : %.3f' % sk)
 
 ##################
 # PLOTTING FIGURES
+
+p.rcParams['font.size'] = FONT_SIZE
+p.rcParams['font.family'] = FONT_FAMILY
 
 fig = pyplot.figure(figsize=(8, 8), dpi=300)
 
