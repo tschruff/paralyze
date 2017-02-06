@@ -26,7 +26,7 @@ setup(
         'Programming Language :: Python :: 3.5'
     ],
 
-    keywords='scientific parallel analysis',
+    keywords='scientific parallel data analysis',
     url='https://github.com/scruffy-t/paralyze',
     author='Tobias Schruff',
     author_email='tobias.schruff@gmail.com',

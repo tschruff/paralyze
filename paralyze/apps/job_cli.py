@@ -8,7 +8,7 @@ CONTEXT_EXTENSIONS = {
 }
 
 
-if __name__ == '__main__':
+def main():
 
     import argparse
     import os
@@ -39,13 +39,13 @@ if __name__ == '__main__':
     # update workspace settings directly with command line values
     wsp.update(args)
 
-    # get all data stored in workspace
-    # template strings will all be filled with values if possible
+    # get all settings stored in workspace
+    # template strings will all be replaced with values
     data = wsp.get_settings()
 
     # export custom extensions to jinja context
     # and make them accessible in the template files
-    # to write something like:
+    # e.g. to write something like:
     #   {% rpath( run_path ) %}
     data.update(CONTEXT_EXTENSIONS)
 
@@ -82,4 +82,8 @@ if __name__ == '__main__':
             logger.info('scheduling run script: {}'.format(run_path))
             os.system(wsp['comp_run_cmd'])
         else:
-            logger.error('cannot execute run script! See previous warnings/errors')
+            logger.error('cannot execute run script! Check previous warnings/errors')
+
+
+if __name__ == '__main__':
+    main()

@@ -3,16 +3,17 @@ from paralyze.core import Capsule, Plane, Sphere
 
 import logging
 import time
+import os
 
 
-def str_to_types(type_str):
+def str_to_body_types(type_str):
     assert isinstance(type_str, str)
 
     types = []
     if ',' in type_str:
         type_names = type_str.split(',')
         for type_name in type_names:
-            types.append(str_to_types(type_name))
+            types.append(str_to_body_types(type_name))
     else:
         type_name = type_str.title()
         types.append(eval(type_name))
@@ -32,17 +33,94 @@ class Command(object):
         return bodies
 
 
+class Slice(Command):
+
+    help = 'create slices along specified axis'
+
+    args = (('axis', {
+                'type'    : str
+            }),
+            ('num_slices', {
+                'type'    : int,
+                'default' : 0
+            }),
+            ('out_folder', {
+                'type'    : str,
+                'default' : '',
+                'help'    : 'path to output folder'
+            }),
+            ('--domain-filter', '-d', {
+                'type'    : str,
+                'default' : None,
+                'help'    : 'axis aligned bounding box used for filtering. Format: "[<x0,y0,z0>,<x1,y1,z1>]"',
+                'dest'    : 'domain_filter'
+            }),
+            ('--strict', '-s', {
+                'action'  : 'store_true',
+                'default' : False,
+                'help'    : 'if enabled, bodies have to be fully contained by the given domain',
+                'dest'    : 'strict'
+            })
+    )
+
+    def __call__(self, args):
+
+        bodies = self.load_bodies(args)
+
+        if args.num_slices < 1:
+            self.log.error('Number of slices must be greater than zero! Aborting ...')
+
+        axes = ['x', 'y', 'z']
+        if args.axis not in axes:
+            self.log.error('Specified axis is not valid! Valid axes are: x, y, z. Aborting ...')
+            return False
+        axis = axes.index(args.axis)
+
+        # extract command line parameters
+        if args.domain_filter == None:
+            domain = bodies.aabb()
+        else:
+            domain = AABB.parse(args.domain)
+
+        if domain.is_empty():
+            self.log.error('Specified domain is empty! Aborting ...')
+            return False
+
+        # apply domain filter
+        old_num_bodies = len(bodies)
+        bodies = bodies.clipped(domain, args.strict)
+        num_bodies = len(bodies)
+        text = 'Strictly filtered' if args.strict else 'Filtered'
+        self.log.info('{} {:d} bodies outside domain. %d bodies remain'.format(text, old_num_bodies-num_bodies, num_bodies))
+
+        # create folder for slice files
+        if not os.path.exists(args.out_folder):
+            os.makedirs(args.out_folder)
+            self.log.info('Created output folder %s' % args.out_folder)
+
+        # create slices and save them
+        slice_file = os.path.join(args.out_folder, 'slice_{axis}_{slice_min:f}-{slice_max:f}.csv')
+        for slice in domain.iter_slices(axis, args.num_slices):
+            slice_bodies = bodies.clipped(slice, args.strict)
+            bodies -= slice_bodies
+            filename = slice_file.format(axis=axes[axis], slice_min=slice.min[axis], slice_max=slice.max[axis])
+            CSBFile.save(filename, slice_bodies)
+            self.log.info('Saved {:d} bodies to file {}'.format(len(slice_bodies), filename))
+
+        return True
+
+
 class Edit(Command):
 
     help = 'edit bodies in an existing csb file'
 
     args = (('out', {
                 'type'    : str,
-                'help'    : 'path to file where filtered bodies are saved to. Will be overridden if it already exists!'
+                'help'    : 'path to file where bodies are saved to. Will be overridden if it already exists!'
             }),
             ('--type-filter', '-t', {
                 'type'    : str,
-                'default' : 'all',
+                'default' : 'All',
                 'help'    : '',
                 'dest'    : 'type_filter'
             }),
@@ -67,7 +145,7 @@ class Edit(Command):
             ('--strict', '-s', {
                 'action'  : 'store_true',
                 'default' : False,
-                'help'    : 'if enabled, bodies have to be fully inside the given domain, otherwise only body center',
+                'help'    : 'if enabled, bodies have to be fully contained by the given domain',
                 'dest'    : 'strict'
             }))
 
@@ -78,7 +156,7 @@ class Edit(Command):
         # extract command line parameters
         if args.domain_filter is not None:
             domain_filter = AABB.parse(args.domain_filter)
-            if domain_filter.isEmpty():
+            if domain_filter.is_empty():
                 self.log.error('Specified domain is empty! Aborting ...')
                 return
         else:
@@ -87,9 +165,9 @@ class Edit(Command):
         offset = Vector.parse(args.offset)
 
         # apply type filter
-        if args.type_filter != 'all':
+        if args.type_filter != 'All':
             try:
-                types = str_to_types(args.type_filter)
+                types = str_to_body_types(args.type_filter)
                 bodies = bodies.subset(lambda body: isinstance(body, types))
             except NameError as e:
                 self.log.exception(e.args[0])
@@ -111,6 +189,7 @@ class Edit(Command):
 
         # apply domain filter
         if domain_filter is not None:
+            num_bodies = len(bodies)
             bodies = bodies.clipped(domain_filter, args.strict)
             text = 'Strictly filtered' if args.strict else 'Filtered'
             self.log.info('{} {:d} bodies outside domain'.format(text, num_bodies-len(bodies)))
@@ -131,14 +210,15 @@ class Exec(Command):
         self.log.info('Execution result: {}'.format(eval(args.expression, globals(), {'bodies': bodies})))
 
 
-if __name__ == '__main__':
+def main():
 
     import argparse
     import sys
 
     commands = {
-        'edit': Edit,
-        'exec': Exec
+        'edit' : Edit,
+        'exec' : Exec,
+        'slice': Slice
     }
 
     parser = argparse.ArgumentParser()
@@ -174,3 +254,7 @@ if __name__ == '__main__':
     log.info('Running "{}" command'.format(args.cmd_name))
     commands[args.cmd_name]()(args)
     log.info('Finished command "{}". Took {:f} seconds'.format(args.cmd_name, time.time()-t0))
+
+
+if __name__ == '__main__':
+    main()

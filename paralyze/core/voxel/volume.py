@@ -28,7 +28,7 @@ class VoxelVolume(object):
     def intersection_volume(self, aabb):
         assert isinstance(aabb, AABB)
         intersect = self.aabb().intersect(aabb)
-        if intersect.isEmpty():
+        if intersect.is_empty():
             return 0.0
 
         local_intersect = intersect.shifted(-self.origin())

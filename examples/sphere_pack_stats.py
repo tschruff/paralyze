@@ -17,7 +17,7 @@ from paralyze.core.algebra import AABB
 # === GENERAL ===
 
 # absolute path to input csb file(s)
-INPUT = '/Users/tobs/sciebo/Diss/Data/Packings/periodic-256/uniform-8/out_*.csv'
+INPUT = '/Users/tobs/sciebo/Data/Bodies/trapping/beds/ln-8-1.6.csv'
 
 # used to scale input to SI units, i.e. [m]
 SCALING_FACTOR = 0.001
@@ -135,7 +135,7 @@ sieves = [sieve * 0.001 for sieve in SIEVES]
 # creates a list of Sphere objects found in INPUT
 diameters = load_diameters(INPUT, SCALING_FACTOR)
 # truncate all diameters smaller than the smallest sieve and larger than the largest sieve
-diameters = [diameter for diameter in diameters if diameter > sieves[0] and diameter < sieves[-1]]
+diameters = [diameter for diameter in diameters if sieves[0] < diameter < sieves[-1]]
 # list of sphere volumes, in cubic-m
 volumes = [volume(diameter) for diameter in diameters]
 # total solid volume of the spheres, in cubic-m

@@ -27,7 +27,6 @@ class CSBFile(object):
         log = logging.getLogger(__name__)
 
         bodies = Bodies()
-        parser = CSBFile()
 
         names = glob.glob(filename)
         if not len(names):
@@ -43,32 +42,31 @@ class CSBFile(object):
                     if g_type not in CSBFile.SupportedTypes:
                         log.warn("Geometry %d is currently not supported by CSBFile. Skipping import." % g_type)
                     else:
-                        bodies.add(parser.parse_body(g_type, line, **kwargs))
+                        bodies.add(CSBFile.parse_body(g_type, line, **kwargs))
 
         return bodies
 
     @staticmethod
     def save(filename, bodies, delimiter=','):
-        parser = CSBFile()
         with open(filename, 'w') as csb:
             for body in bodies:
-                data = parser.get_data(body)
+                data = CSBFile.get_data(body)
                 csb.write(delimiter.join(map(str, data)) + os.linesep)
 
-    # instance members
-
-    def get_geom_type(self, body):
+    @staticmethod
+    def get_geom_type(body):
         """
 
         :param body:
         :rtype: int
         """
         if isinstance(body, Sphere):
-            return self.SphereType
+            return CSBFile.SphereType
 
-    def get_data(self, body):
+    @staticmethod
+    def get_data(body):
         pos = body.position()
-        data = [self.get_geom_type(body), pos[0], pos[1], pos[2]]
+        data = [CSBFile.get_geom_type(body), pos[0], pos[1], pos[2]]
 
         if isinstance(body, Sphere):
             data.append(body.radius() * 2.0)
@@ -77,30 +75,34 @@ class CSBFile(object):
 
     # parser methods
 
-    def parse_body(self, geom_type, line, **kwargs):
-        if geom_type == self.SphereType:
-            return self.parse_sphere(line, **kwargs)
-        elif geom_type == self.PlaneType:
-            return self.parse_plane(line, **kwargs)
+    @staticmethod
+    def parse_body(geom_type, line, **kwargs):
+        if geom_type == CSBFile.SphereType:
+            return CSBFile.parse_sphere(line, **kwargs)
+        elif geom_type == CSBFile.PlaneType:
+            return CSBFile.parse_plane(line, **kwargs)
 
-    def parse_vector(self, line):
+    @staticmethod
+    def parse_vector(line):
         assert len(line) == 3
         return Vector((float(line[0]), float(line[1]), float(line[2])))
 
-    def parse_sphere(self, line, **kwargs):
-        assert int(line[0]) == self.SphereType
+    @staticmethod
+    def parse_sphere(line, **kwargs):
+        assert int(line[0]) == CSBFile.SphereType
         assert len(line) >= 5
 
-        center = self.parse_vector(line[1:4])
+        center = CSBFile.parse_vector(line[1:4])
         diameter = float(line[4])
 
         return Sphere(center, diameter / 2.0, **kwargs)
 
-    def parse_plane(self, line, **kwargs):
-        assert int(line[0]) == self.PlaneType
+    @staticmethod
+    def parse_plane(line, **kwargs):
+        assert int(line[0]) == CSBFile.PlaneType
         assert len(line) >= 7
 
-        center = self.parse_vector(line[1:4])
-        normal = self.parse_vector(line[4:7])
+        center = CSBFile.parse_vector(line[1:4])
+        normal = CSBFile.parse_vector(line[4:7])
 
         return Plane(center, normal, **kwargs)

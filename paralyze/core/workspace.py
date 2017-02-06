@@ -39,7 +39,7 @@ DEFAULTS = {
     'comp_config': '',
     'comp_case': '',
     'comp_job_name': '{comp_config}_{comp_case}',
-    'comp_arch': 'juqueen',
+    'comp_arch': 'bluegene',
     'comp_cores_per_node': 16,
     'comp_nodes': 4096,
     'comp_memory_per_process': 512,
@@ -50,7 +50,7 @@ DEFAULTS = {
     'comp_notify_user': '',
 
     'comp_run_cmd': {
-        'juqueen': 'llsubmit {env_run_path}',
+        'bluegene': 'llsubmit {env_run_path}',
         'lsf': 'bsub < {env_run_path}'
     }
 }
@@ -75,7 +75,7 @@ class Workspace(object):
                 logger.error('')
                 raise IOError('No such file or directory {}'.format(settings_path))
 
-        # load raw dict (with templates)
+        # load raw dict (with raw template strings)
         self._raw = self.__load()
 
     def __create(self):

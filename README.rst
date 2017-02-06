@@ -1,5 +1,5 @@
-sparc
-=====
+paralyze
+========
 
 **sparc**, an acronym for Scientific PARameter Collection, is a Python module that provides several classes
 to *create*, *edit*, *visualize*, and *serialize* many kinds of (scientific) parameter structures. In the world of

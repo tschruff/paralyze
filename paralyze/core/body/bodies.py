@@ -85,3 +85,11 @@ class Bodies(set):
         if strict:
             return self.subset(lambda body: domain.contains(body.aabb()))
         return self.subset(lambda body: domain.contains(body.position()))
+
+    def sliced(self, axis, num_slices, domain=None, strict=False):
+        if not domain:
+            domain = self.aabb()
+        sliced_bodies = []
+        for domain_slice in domain.iter_slices(axis, num_slices):
+            sliced_bodies.append(self.clipped(domain_slice, strict))
+        return sliced_bodies

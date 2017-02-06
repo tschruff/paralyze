@@ -4,6 +4,9 @@ import numpy as np
 
 
 class AABB(object):
+    """ Implements a half-open interval (min corner is included, max corner is excluded)
+
+    """
 
     def __init__(self, min_corner=(0, 0, 0), max_corner=None):
         if max_corner is None:
@@ -12,7 +15,7 @@ class AABB(object):
         self._min = Vector(min_corner)
         self._max = Vector(max_corner)
 
-        assert self.isValid(), '{!r} is not valid'.format(self)
+        assert self.is_valid(), '{!r} is not valid'.format(self)
 
     def __contains__(self, item):
         return self.contains(item)
@@ -34,7 +37,6 @@ class AABB(object):
         return (self.min + self.max) / 2.0
 
     def contains(self, item):
-        # implements a half-open interval (min corner is included, max corner is excluded)
         if isinstance(item, AABB):
             return (self.min[0] <= item.min[0] and self.min[1] <= item.min[1] and self.min[2] <= item.min[2]) and\
                    (item.max[0] < self.max[0] and item.max[1] < self.max[1] and item.max[2] < self.max[2])
@@ -68,21 +70,21 @@ class AABB(object):
 
     def intersects(self, other):
         assert isinstance(other, AABB)
-        if self.isEmpty() and other.isEmpty():
+        if self.is_empty() and other.is_empty():
             return False
 
         return other.max[0] > self.min[0] and other.min[0] < self.max[0] and \
                other.max[1] > self.min[1] and other.min[1] < self.max[1] and \
                other.max[2] > self.min[2] and other.min[2] < self.max[2]
 
-    def isEmpty(self):
+    def is_empty(self):
         """ An AABB is considered empty if the min and max corner are equal
 
         :return: Returns a bool indicating whether the AABB is considered empty.
         """
         return self.min == self.max
 
-    def isValid(self):
+    def is_valid(self):
         """ An AABB is considered valid if all three size components are greater or equal to zero.
 
         :return: Returns a bool indicating whether the AABB is considered valid.
@@ -93,7 +95,7 @@ class AABB(object):
         if isinstance(axis, str) and axis in ['x', 'y', 'z']:
             axis = ['x', 'y', 'z'].index(axis)
         elif not isinstance(axis, int) or axis not in [0, 1, 2]:
-            raise TypeError('Unexpected axis type')
+            raise TypeError('Unexpected axis type/value: %s' % str(axis))
 
         ds = self.size[axis] / num_slices
 
