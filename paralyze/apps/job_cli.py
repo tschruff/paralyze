@@ -24,12 +24,12 @@ def main():
     parser = argparse.ArgumentParser()
 
     # required arguments
-    parser.add_argument('comp_case', type=str)
-    parser.add_argument('comp_config', default='')
+    parser.add_argument('comp_case', type=str, help='a unique identifier for the simulation case')
 
     # optional arguments
+    parser.add_argument('--comp_config', type=str, help='name of the simulation configuration')
     parser.add_argument('--workspace', default=os.getcwd())
-    parser.add_argument('--schedule', action='store_true', default=False)
+    parser.add_argument('--schedule', action='store_true', default=False, help='schedule job after creation?')
 
     args = vars(parser.parse_args())
 
@@ -53,7 +53,6 @@ def main():
 
     run_template_dir = wsp.abs_path('env_template_dir')
     run_template_file = wsp.get('env_template_file')
-    run_template_path = wsp.get('env_template_path')
     run_path = wsp.get('env_run_path')
 
     try:

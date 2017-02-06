@@ -3,7 +3,7 @@ import json
 import logging
 
 from paralyze import VERSION
-from paralyze.core import rdict
+from paralyze.core import rdict, get_input
 
 logger = logging.getLogger(__name__)
 
@@ -17,21 +17,21 @@ DEFAULTS = {
     'paralyze_version': VERSION,
 
     # environment settings
-    'env_app_dir': 'apps',
+    'env_app_dir': 'apps',  # application folder
     'env_app_file': '',
     'env_app_path': os.path.join('{env_app_dir}', '{env_app_file}'),
-    'env_config_dir': 'configs',
+    'env_config_dir': 'configs',  # config file folder
     'env_config_file': '{comp_config}.prm',
     'env_config_path': os.path.join('{env_config_dir}', '{env_config_file}'),
-    'env_log_dir': 'logs',
+    'env_log_dir': 'logs',  # log file folder
     'env_log_file': '{comp_job_name}_log.txt',
     'env_log_path': os.path.join('{env_log_dir}', '{env_log_file}'),
     'env_log_error_file': '{comp_job_name}_errors.txt',
     'env_log_error_path': os.path.join('{env_log_dir}', '{env_log_error_file}'),
-    'env_run_dir': 'run',
+    'env_run_dir': 'run',  # run folder
     'env_run_file': '{comp_job_name}.sh',
     'env_run_path': os.path.join('{env_run_dir}', '{env_run_file}'),
-    'env_template_dir': 'templates',
+    'env_template_dir': 'templates',  # job script templates folder
     'env_template_file': '{comp_config}.txt',
     'env_template_path': os.path.join('{env_template_dir}', '{env_template_file}'),
 
@@ -51,9 +51,13 @@ DEFAULTS = {
 
     'comp_run_cmd': {
         'bluegene': 'llsubmit {env_run_path}',
-        'lsf': 'bsub < {env_run_path}'
+        'lsf': 'bsub < {env_run_path}',
+        'windows': '{env_run_path}'
     }
 }
+
+
+FOLDER_KEYS = ['env_app_dir', 'env_config_dir', 'env_log_dir', 'env_run_dir', 'env_template_dir']
 
 
 class Workspace(object):
@@ -79,14 +83,16 @@ class Workspace(object):
         self._raw = self.__load()
 
     def __create(self):
+        # create hidden settings folder
         settings_dir = os.path.join(self._root, SETTINGS_DIR)
         if not os.path.exists(settings_dir):
-            logger.info('creating paralyze workspace {}'.format(settings_dir))
+            logger.debug('creating paralyze workspace at {}'.format(self._root))
             os.mkdir(settings_dir)
-        settings_file = os.path.join(settings_dir, SETTINGS_FILE)
-        with open(settings_file, 'w') as settings:
-            logger.info('creating paralyze workspace settings file {}'.format(SETTINGS_FILE))
-            json.dump(DEFAULTS, settings, indent=4, sort_keys=True)
+        # save settings to json file
+        settings_path = os.path.join(settings_dir, SETTINGS_FILE)
+        with open(settings_path, 'w') as settings_file:
+            logger.debug('saving paralyze workspace settings to file {}'.format(SETTINGS_FILE))
+            json.dump(DEFAULTS, settings_file, indent=4, sort_keys=True)
 
     def __load(self):
         settings_file = os.path.join(self._root, SETTINGS_DIR, SETTINGS_FILE)
@@ -113,6 +119,14 @@ class Workspace(object):
     def abs_path(self, key):
         return os.path.join(self.root, self.get(key))
 
+    def create_folders(self):
+        logger.debug('creating workspace folders %s' % ', '.join([self.get(folder) for folder in FOLDER_KEYS]))
+        for folder in FOLDER_KEYS:
+            try:
+                os.mkdir(self.get(folder))
+            except FileExistsError as e:
+                logger.warning(e.args[0])
+
     def get(self, key):
         return self._raw[key]
 
@@ -124,13 +138,13 @@ class Workspace(object):
         return settings
 
     def update(self, other):
-        """ Updates EXISTING items.
+        """ Updates only EXISTING items.
 
         :param other:
         :return:
         """
         for key in self._raw.keys():
-            self._raw[key] = other[key]
+            self._raw[key] = other.get(key, self._raw[key])
 
     def perform_check(self):
         result = True

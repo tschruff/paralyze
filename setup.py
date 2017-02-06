@@ -41,8 +41,9 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'csb=paralyze.apps.csb_cli:main',
-            'job=paralyze.apps.job_cli:main'
+            'paralyze_csb=paralyze.apps.csb_cli:main',
+            'paralyze_job=paralyze.apps.job_cli:main',
+            'paralyze_workspace=paralyze.apps.workspace_cli:main'
         ],
     },
 
