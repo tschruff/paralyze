@@ -20,6 +20,9 @@ class rdict(object):
     def __setitem__(self, key, value):
         self._dict[key] = value
 
+    def __str__(self):
+        return str(self._dict)
+
     def keys(self):
         return self._dict.keys()
 

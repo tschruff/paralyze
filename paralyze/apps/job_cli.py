@@ -3,7 +3,7 @@ from paralyze.core import Workspace
 
 CONTEXT_EXTENSIONS = {
     # export functions to context
-    'rpath': Workspace.rel_path,
+    'rpath': Workspace.rel_path,  # TODO: rel_path must be static
     'apath': Workspace.abs_path,
 }
 
@@ -48,6 +48,7 @@ def main():
     # e.g. to write something like:
     #   {% rpath( run_path ) %}
     data.update(CONTEXT_EXTENSIONS)
+    data.update(wsp.get_context_extensions())
 
     paths_exist = wsp.perform_check()
 

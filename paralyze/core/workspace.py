@@ -1,14 +1,20 @@
 import os
 import json
 import logging
+import sys
+import importlib
+import itertools
+
 
 from paralyze import VERSION
-from paralyze.core import rdict, get_input
+from paralyze.core import rdict
 
 logger = logging.getLogger(__name__)
 
 SETTINGS_DIR = '.paralyze'
 SETTINGS_FILE = 'workspace.json'
+
+CONTEXT_EXTENSIONS_DIR = 'context_ext'
 
 # default workspace settings
 DEFAULTS = {
@@ -127,6 +133,18 @@ class Workspace(object):
             except FileExistsError as e:
                 logger.warning(e.args[0])
 
+    def get_context_extensions(self):
+        ext_path = os.path.join(self.root, CONTEXT_EXTENSIONS_DIR)
+        mod_path = os.path.join(ext_path, '__init__.py')
+
+        ext = {}
+        if os.path.exists(mod_path):
+            sys.path.append(ext_path)
+            mod = importlib.import_module('context_ext')
+            for ext_key in mod.__all__:
+                ext[ext_key] = getattr(mod, ext_key)
+        return ext
+
     def get(self, key):
         return self._raw[key]
 
@@ -143,8 +161,11 @@ class Workspace(object):
         :param other:
         :return:
         """
-        for key in self._raw.keys():
-            self._raw[key] = other.get(key, self._raw[key])
+        self_keys = set(self._raw.keys())
+        other_keys = set(other.keys())
+
+        for key in self_keys.intersection(other_keys):
+            self._raw[key] = other[key]
 
     def perform_check(self):
         result = True
