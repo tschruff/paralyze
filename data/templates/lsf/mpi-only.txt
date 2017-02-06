@@ -1,0 +1,5 @@
+{% extends "header.txt" %}
+{% block body %}
+# Execute application with given config file
+$MPIEXEC $FLAGS_MPI_BATCH {{ rpath(app_path) }} {{ rpath(config_path) }} {% block args %}{% endblock %}
+{% endblock %}
