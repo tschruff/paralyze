@@ -1,7 +1,9 @@
 from string import Formatter
+import re
 
 
 class rdict(object):
+
     def __init__(self, dictionary):
         self._format = Formatter()
         self._dict = dictionary
@@ -28,3 +30,13 @@ class rdict(object):
 
     def update(self, other):
         self._dict.update(other)
+
+    def variables(self):
+        vars = []
+        for item in self._dict.values():
+            if type(item) != str:
+                continue
+            vars.extend(re.findall(r"\{([a-zA-Z_]+)\}", item))
+        vars = set(vars)
+        keys = set(self._dict)
+        return vars.difference(keys)
