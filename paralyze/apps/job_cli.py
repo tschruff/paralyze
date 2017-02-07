@@ -127,44 +127,58 @@ def main():
         'rpath'    : wsp.rel_path,
         'apath'    : wsp.abs_path,
         'root_path': wsp.root
-	}
+    }
 
     context.update(context_extensions)
     context.update(wsp.get_context_extensions())
 
     paths_exist = perform_check(wsp, logger)
 
-    template_dir = wsp.abs_path('template_dir')  # folder which contains the run script template files
-    template_file = wsp.get('template_file')     # file name of run script template to be read
-    run_path = wsp.get('run_path')               # path to write run script file to
+    template_dir = wsp.abs_path('template_dir')          # folder which contains the run script template files
+    job_template_file = wsp.get('job_template_file')     # file name of run script template to be read
+    job_template_path = os.path.join(wsp.get('job_dir'), job_template_file)
+    config_template_file = wsp.get('config_template_file')
+    config_template_path = os.path.join(wsp.get('job_dir'), config_template_file)
 
     try:
         env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
-        template = env.loader.get_source(env, template_file)[0]
 
-        template_ast = env.parse(template)
-        var = meta.find_undeclared_variables(template_ast)
+        job_template = env.loader.get_source(env, job_template_path)[0]
+        config_template = env.loader.get_source(env, config_template_path)[0]
 
-        var = var - set([name for name in __builtins__ if not name.startswith('_')])
-        var = var - set(context.keys())
+        job_template_ast = env.parse(job_template)
+        config_template_ast = env.parse(config_template)
+
+        job_vars = meta.find_undeclared_variables(job_template_ast)
+        config_vars = meta.find_undeclared_variables(config_template_ast)
+
+        custom_vars = job_vars + config_vars
+
+        custom_vars = custom_vars - set([name for name in __builtins__ if not name.startswith('_')])
+        custom_vars = custom_vars - set(context.keys())
         
         # search for job specific args in job script template
         parser = argparse.ArgumentParser()
-        for v in var:
-            parser.add_argument('--%s' % v, required=True, type=ast.literal_eval)
+        for var in custom_vars:
+            parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
         # parse job specific args from command line
         job_args = parser.parse_args(job_args)
 
         context.update(vars(job_args))
 
         # reload template file as template
-        template = env.get_template(template_file)
-        # render and write run script file
-        with open(run_path, 'w') as script:
-            script.write(template.render(**context))
+        job_template = env.get_template(job_template_path)
+        config_template = env.get_template(config_template_path)
+
+        # render and write job script file
+        with open(os.path.join(wsp.get('run_dir'), job_template_path), 'w') as job:
+            job.write(job_template.render(**context))
+        # render and write config file
+        with open(os.path.join(wsp.get('run_dir'), config_template_path), 'w') as config:
+            config.write(config_template.render(**context))
 
     except jinja2.exceptions.UndefinedError as e:
-        logger.error('usage of undefined parameter "{0}" in run script template!'.format(e.args[0]))
+        logger.error('usage of undefined parameter "{}" in template!'.format(e.args[0]))
         sys.exit(1)
     except jinja2.exceptions.TemplateNotFound:
         logger.error('template file not found!')
@@ -175,7 +189,7 @@ def main():
     if args.schedule:
         if paths_exist:
             logger.info('scheduling run script: {}'.format(run_path))
-            os.system(wsp['crun_cmd'])
+            os.system(wsp['run_cmd'])
         else:
             logger.error('cannot execute run script! Check previous warnings/errors')
 
