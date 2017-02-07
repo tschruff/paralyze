@@ -35,6 +35,14 @@ class Workspace(object):
         # load raw dict (with raw template strings)
         self._raw = self.__load()
 
+        # check if custom context extensions exist
+        ext_path = os.path.join(self.root, CONTEXT_EXTENSIONS_DIR, '__init__.py')
+        if os.path.exists(ext_path):
+            self._has_ext = True
+            sys.path.append(self._root)
+        else:
+            self._has_ext = False
+
     def __create(self, defaults=None):
         # create hidden settings folder
         settings_dir = os.path.join(self._root, SETTINGS_DIR)
@@ -81,12 +89,8 @@ class Workspace(object):
                 logger.warning(e.args[0])
 
     def get_context_extensions(self):
-        ext_path = os.path.join(self.root, CONTEXT_EXTENSIONS_DIR)
-        mod_path = os.path.join(ext_path, '__init__.py')
-
         ext = {}
-        if os.path.exists(mod_path):
-            sys.path.append(ext_path)
+        if self._has_ext:
             mod = importlib.import_module('context_ext')
             for ext_key in mod.__all__:
                 ext[ext_key] = getattr(mod, ext_key)
