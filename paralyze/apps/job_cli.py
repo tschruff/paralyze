@@ -123,14 +123,14 @@ def main():
 
     # get all settings stored in workspace
     # template strings will all be replaced with values
-    data = wsp.get_settings()
+    context = wsp.get_settings()
 
     # export custom extensions to jinja context
     # and make them accessible in the template files
     # e.g. to write something like:
     #   {% rpath( run_path ) %}
-    data.update(CONTEXT_EXTENSIONS)
-    data.update(wsp.get_context_extensions())
+    context.update(CONTEXT_EXTENSIONS)
+    context.update(wsp.get_context_extensions())
 
     paths_exist = perform_check(wsp, logger)
 
@@ -140,12 +140,12 @@ def main():
 
     try:
         env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
-        template = env.get_template(template_file)
+        template = env.loader.get_source(env, template_file)[0]
+        # template = env.get_template(template_file)
 
         ast = env.parse(template)
         var = meta.find_undeclared_variables(ast)
-
-        print(var)
+        var = var - set(context.keys())
 
         # search for job specific args in job script template
         parser = argparse.ArgumentParser()
@@ -154,11 +154,11 @@ def main():
         # parse job specific args from command line
         job_args = parser.parse_args(job_args)
 
-        data.update(vars(job_args))
+        context.update(vars(job_args))
 
         # render and write run script file
         with open(run_path, 'w') as script:
-            script.write(template.render(**data))
+            script.write(template.render(**context))
 
     except jinja2.exceptions.UndefinedError as e:
         logger.error('usage of undefined parameter "{0}" in run script template!'.format(e.args[0]))
