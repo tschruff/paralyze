@@ -2,6 +2,7 @@ from paralyze import ARCH, VERSION
 from paralyze.core import Workspace
 
 import os
+import ast
 
 
 RUN_COMMANDS = {
@@ -57,13 +58,6 @@ FOLDER_KEYS = [
 ]
 
 
-CONTEXT_EXTENSIONS = {
-    # export functions to context
-    'rpath': Workspace.rel_path,  # TODO: rel_path must be static in order to work
-    'apath': Workspace.abs_path,
-}
-
-
 def perform_check(wsp, logger):
     result = True
     if not os.path.exists(wsp.abs_path('app_path')):
@@ -115,7 +109,7 @@ def main():
     # add workspace variables as command line arguments
     parser = argparse.ArgumentParser()
     for var in wsp.variables():
-        parser.add_argument('--%s' % var, required=True)
+        parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
     wsp_args, job_args = parser.parse_known_args(custom_args)
 
     # update workspace settings directly with command line values
@@ -129,7 +123,13 @@ def main():
     # and make them accessible in the template files
     # e.g. to write something like:
     #   {% rpath( run_path ) %}
-    context.update(CONTEXT_EXTENSIONS)
+    context_extensions = {
+        'rpath'    : wsp.rel_path,
+        'apath'    : wsp.abs_path,
+        'root_path': wsp.root
+	}
+
+    context.update(context_extensions)
     context.update(wsp.get_context_extensions())
 
     paths_exist = perform_check(wsp, logger)
@@ -141,21 +141,24 @@ def main():
     try:
         env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
         template = env.loader.get_source(env, template_file)[0]
-        # template = env.get_template(template_file)
 
-        ast = env.parse(template)
-        var = meta.find_undeclared_variables(ast)
+        template_ast = env.parse(template)
+        var = meta.find_undeclared_variables(template_ast)
+
+        var = var - set([name for name in __builtins__ if not name.startswith('_')])
         var = var - set(context.keys())
-
+        
         # search for job specific args in job script template
         parser = argparse.ArgumentParser()
         for v in var:
-            parser.add_argument('--%s' % v, required=True)
+            parser.add_argument('--%s' % v, required=True, type=ast.literal_eval)
         # parse job specific args from command line
         job_args = parser.parse_args(job_args)
 
         context.update(vars(job_args))
 
+        # reload template file as template
+        template = env.get_template(template_file)
         # render and write run script file
         with open(run_path, 'w') as script:
             script.write(template.render(**context))
