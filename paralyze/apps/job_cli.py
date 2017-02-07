@@ -66,20 +66,17 @@ CONTEXT_EXTENSIONS = {
 
 def perform_check(wsp, logger):
     result = True
-    if not os.path.exists(wsp.abs_path('env_app_path')):
-        logger.warning('application {} does not exist'.format(wsp.get('env_app_path')))
+    if not os.path.exists(wsp.abs_path('app_path')):
+        logger.warning('application {} does not exist'.format(wsp.get('app_path')))
         result = False
-    if not os.path.exists(wsp.abs_path('env_config_path')):
-        logger.warning('configuration {} does not exist'.format(wsp.get('env_config_path')))
+    if not os.path.exists(wsp.abs_path('log_dir')):
+        logger.warning('log folder {} does not exist'.format(wsp.get('log_dir')))
         result = False
-    if not os.path.exists(wsp.abs_path('env_log_dir')):
-        logger.warning('log folder {} does not exist'.format(wsp.get('env_log_dir')))
+    if not os.path.exists(wsp.abs_path('template_path')):
+        logger.error('run script template file {} does not exist'.format(wsp.get('template_path')))
         result = False
-    if not os.path.exists(wsp.abs_path('env_template_path')):
-        logger.error('run script template file {} does not exist'.format(wsp.get('env_template_path')))
-        result = False
-    if not os.path.exists(wsp.abs_path('env_run_dir')):
-        logger.error('run folder {} does not exist'.format(wsp.get('env_run_dir')))
+    if not os.path.exists(wsp.abs_path('run_dir')):
+        logger.error('run folder {} does not exist'.format(wsp.get('run_dir')))
         result = False
     return result
 
@@ -119,7 +116,7 @@ def main():
     parser = argparse.ArgumentParser()
     for var in wsp.variables():
         parser.add_argument('--%s' % var, required=True)
-    wsp_args = parser.parse_args(custom_args)
+    wsp_args, job_args = parser.parse_known_args(custom_args)
 
     # update workspace settings directly with command line values
     wsp.update(vars(wsp_args))
@@ -137,19 +134,27 @@ def main():
 
     paths_exist = perform_check(wsp, logger)
 
-    run_template_dir = wsp.abs_path('env_template_dir')  # folder which contains the run script template files
-    run_template_file = wsp.get('env_template_file')     # file name of run script template
-    run_path = wsp.get('env_run_path')                   # path to run script file
+    template_dir = wsp.abs_path('template_dir')  # folder which contains the run script template files
+    template_file = wsp.get('template_file')     # file name of run script template to be read
+    run_path = wsp.get('run_path')               # path to write run script file to
 
     try:
-        env = jinja2.Environment(loader=jinja2.FileSystemLoader(run_template_dir))
-        template = env.get_template(run_template_file)
+        env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
+        template = env.get_template(template_file)
 
         ast = env.parse(template)
         var = meta.find_undeclared_variables(ast)
+
+        print(var)
+
+        # search for job specific args in job script template
+        parser = argparse.ArgumentParser()
         for v in var:
-            if v not in set(data.keys()):
-                logger.warning('parameter "{0}" in run script template is undefined!'.format(v))
+            parser.add_argument('--%s' % v, required=True)
+        # parse job specific args from command line
+        job_args = parser.parse_args(job_args)
+
+        data.update(vars(job_args))
 
         # render and write run script file
         with open(run_path, 'w') as script:
@@ -167,7 +172,7 @@ def main():
     if args.schedule:
         if paths_exist:
             logger.info('scheduling run script: {}'.format(run_path))
-            os.system(wsp['comp_run_cmd'])
+            os.system(wsp['crun_cmd'])
         else:
             logger.error('cannot execute run script! Check previous warnings/errors')
 
