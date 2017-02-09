@@ -8,6 +8,9 @@ from paralyze.core import rdict
 
 logger = logging.getLogger(__name__)
 
+LOG_FILE = 'log.txt'
+LOG_FILE_FORMAT = '[%(asctime)-15s][%(levelname)-7s] %(message)s'
+LOG_STREAM_FORMAT = '[%(levelname)-7s] %(message)s'
 SETTINGS_DIR = '.paralyze'
 SETTINGS_FILE = 'workspace.json'
 CONTEXT_EXTENSIONS_DIR = 'context_ext'
@@ -15,7 +18,7 @@ CONTEXT_EXTENSIONS_DIR = 'context_ext'
 
 class Workspace(object):
 
-    def __init__(self, path, auto_create=False, defaults=None):
+    def __init__(self, path, auto_create=False, defaults=None, logger=None, log_level=logging.INFO):
         # absolute path to workspace root folder
         self._root = path
 
@@ -42,6 +45,10 @@ class Workspace(object):
             sys.path.append(self._root)
         else:
             self._has_ext = False
+
+        # init main logger
+        if logger:
+            self.init_logger(logger, log_level)
 
     def __create(self, defaults=None):
         # create hidden settings folder
@@ -70,6 +77,18 @@ class Workspace(object):
     def __str__(self):
         return str(self.get_settings())
 
+    def init_logger(self, logger, level=logging.INFO): 
+        # configure and add file handler
+        file_h = logging.FileHandler(os.path.join(self.root, SETTINGS_DIR, LOG_FILE))
+        file_h.setFormatter(logging.Formatter(LOG_FILE_FORMAT))
+        file_h.setLevel(logging.DEBUG)
+        logger.addHandler(file_h)
+        # configure and add stream handler
+        bash_h = logging.StreamHandler()
+        bash_h.setFormatter(logging.Formatter(LOG_STREAM_FORMAT))
+        bash_h.setLevel(level)
+        logger.addHandler(bash_h)
+
     @property
     def root(self):
         return self._root
@@ -96,8 +115,11 @@ class Workspace(object):
                 ext[ext_key] = getattr(mod, ext_key)
         return ext
 
-    def get(self, key):
-        return self._raw[key]
+    def get(self, key, default=None, raw=False):
+        if raw:
+            return self._raw.get_raw(key, default)
+        else:
+            return self._raw.get(key, default)
 
     def get_settings(self, scope_filter=()):
         settings = {}
@@ -106,14 +128,16 @@ class Workspace(object):
                 settings[key] = self.get(key)
         return settings
 
+    def keys(self):
+        return self._raw.keys()
+
     def update(self, other):
         """ Updates items.
 
         :param other:
         :return:
         """
-        for key in other.keys():
-            self._raw[key] = other[key]
+        self._raw.update(other)
 
     def variables(self):
         return self._raw.variables()

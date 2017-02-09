@@ -25,6 +25,12 @@ class rdict(object):
     def __str__(self):
         return str(self._dict)
 
+    def get(self, key, default=None):
+        return self[key] or default
+
+    def get_raw(self, key, default=None):
+        return self._dict.get(key, default)
+
     def keys(self):
         return self._dict.keys()
 
