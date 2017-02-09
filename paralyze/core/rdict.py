@@ -26,7 +26,10 @@ class rdict(object):
         return str(self._dict)
 
     def get(self, key, default=None):
-        return self[key] or default
+        if key in self.keys():
+            return self[key]
+        else:
+            return default
 
     def get_raw(self, key, default=None):
         return self._dict.get(key, default)
@@ -38,11 +41,11 @@ class rdict(object):
         self._dict.update(other)
 
     def variables(self):
-        vars = []
+        var = []
         for item in self._dict.values():
             if type(item) != str:
                 continue
-            vars.extend(re.findall(r"\{([a-zA-Z_]+)\}", item))
-        vars = set(vars)
+            var.extend(re.findall(r"\{([a-zA-Z_]+)\}", item))
+        var = set(var)
         keys = set(self._dict)
-        return vars.difference(keys)
+        return var.difference(keys)

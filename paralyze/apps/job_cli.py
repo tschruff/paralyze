@@ -1,9 +1,6 @@
 from paralyze import ARCH, VERSION
 from paralyze.core import Workspace
 
-import os
-import ast
-
 
 RUN_COMMANDS = {
     'bluegene': 'llsubmit {job_path}',
@@ -16,55 +13,90 @@ RUN_COMMANDS = {
 # default workspace settings
 DEFAULTS = {
 
-    # job name
-    "job_name": "<not-set>",
-
     # general settings
-    'paralyze_version': VERSION,
+    '__paralyze_version': VERSION,
 
-    # environment settings
-    'app_dir': 'apps',  # application folder
-    'app_file': '<not-set>',
-    'app_path': '{app_dir}/{app_file}',
+    # job settings
+    "job_type": "",
+    "job_name": "",
+    "job_path": "",
 
-    'run_dir'     : 'run',        # run folder
-    'template_dir': 'templates',  # job script templates folder
+    # all files that should be parsed for a job
+    "templates": [],
+    "exec_template": "",
 
-    # config file settings
-    'config_dir': 'configs',
-    'config_path': "{run_dir}/{config_dir}/{job_name}.prm",
+    # optional folder to store template files to
+    "template_dir": "",
 
-    # job file settings
-    "job_dir"     : 'jobs',
-    "job_path"    : '{run_dir}/{job_dir}/{job_name}.sh',
-
-    "job_template_path": '{template_dir}/{job_dir}/{job_type}.sh',
-    "config_template_path": '{template_dir}/{config_dir}/{job_type}.sh',
-
-    # log file settings
-    'log_dir': '{run_dir}/logs',
-    'log_path': '{log_dir}/{job_name}.txt',
-    'log_error_path': '{log_dir}/{job_name}_errors.txt',
-
-    # computational settings
-    'cores_per_node': 16,
-    'nodes': 4096,
-    'memory_per_process': 512,
-    'wc_limit': '4:00',
-
-    # notifications
-    'notify_start': False,
-    'notify_end': False,
-    'notify_error': False,
-    'notify_user': '',
+    # optional folder to store files for execution
+    "run_dir": "",
 
     # job execution command (may depend on system architecture)
     'run_cmd': RUN_COMMANDS[ARCH]
 }
 
 
+def get_template_variables(env, template_file, context):
+    """ Read template_file as plain file and parse variables
+
+    :param env:
+    :param template_file: path to template file
+    :param context:
+    :return: list of template variables (strings)
+    """
+    template = env.loader.get_source(env, template_file)[0]
+    template_ast = env.parse(job_template)
+
+    template_vars = meta.find_undeclared_variables(template_ast)
+    # substract builtin names
+    template_vars = template_vars - set([name for name in __builtins__ if not name.startswith('_')])
+    # and names that already exist in the global context
+    template_vars = template_vars - set(context.keys())
+
+    return template_vars
+
+
+def save_job_file(env, template_file, context):
+    """ Parses template variables from template_file and
+    adds them as argument to the command line. Rendered files
+    will be saved to <run_dir>/<job_name>.<suffix_of_template_file>
+
+    Note: Existing files will be overridden.
+
+    :param env:
+    :param template_file: path to template file
+    :param context:
+    :return: None
+    """
+    template_vars = get_template_variables(env, template_file, context)
+    # search for job specific args in job script template
+    parser = argparse.ArgumentParser()
+    for var in template_vars:
+        parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
+    # parse job specific args from command line
+    job_args, other_args = parser.parse_known_args(job_args)
+
+    context.update(vars(job_args))
+
+    # load template file
+    template = env.get_template(job_template_path)
+
+    suffix = template_file[template_file.rfind('.'):]
+    out_file = os.path.join(wsp.get('run_dir'), wsp.get('job_name') + suffix)
+    if os.path.exists(out_file):
+        logger.warning('Replacing existing file "{}"!'.format(out_file))
+
+    # render and write file
+    with open(out_file, 'w') as job:
+        job.write(template.render(**context))
+
+    # log progress
+    logger.info('Created file "{}"'.format(out_file))
+
+
 def main():
 
+    import ast
     import argparse
     import os
     import sys
@@ -78,36 +110,53 @@ def main():
     parser = argparse.ArgumentParser()
 
     # add job_cli arguments
+    parser.add_argument('--job-type', default="", dest='job_type')
     parser.add_argument('--create-workspace', action='store_true', default=False, dest='create_workspace')
     parser.add_argument('--schedule', action='store_true', default=False, help='schedule job after creation?')
     parser.add_argument('--verbose', action='store_true', default=False)
 
     args, custom_args = parser.parse_known_args()
 
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+
+    # create workspace and exit
     if args.create_workspace:
         wsp = Workspace(os.getcwd(), True, DEFAULTS)
-    else:
-        wsp = Workspace(os.getcwd(), False)
+        print('Info: created new workspace at {}'.format(wsp.root))
+        sys.exit(0)
+    elif not args.job_type:
+        print('Error: either --job-type or --create-workspace must be given')
+        sys.exit(1)
 
-    if args.verbose:
-        wsp.init_logger(logger, level=logging.DEBUG)
-    else:
-        wsp.init_logger(logger, level=logging.INFO)
+    # load existing workspace
+    try:
+        wsp = Workspace(os.getcwd(), False, main_logger=logger, log_level=log_level)
+    except RuntimeError as e:
+        print('Error: Directory {} is not a paralyze workspace'.format(os.getcwd()))
+        print('Run "{} --create-workspace" first to create a workspace here'.format(sys.argv[0]))
+        sys.exit(1)
+
+    if args.job_type:
+        # add job_type to workspace
+        wsp.update({'job_type': args.job_type})
+        # and export job_type specific settings to global settings namespace
+        # possibly overriding global settings!
+        wsp.update(wsp.get(args.job_type, default={}))
 
     parser = argparse.ArgumentParser()
     # add workspace variables as required command line arguments
     for var in wsp.variables():
         parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
     # add workspace keys as optional command line arguments
-    for var in wsp.keys():
+    for var in wsp.keys(private=False):
         parser.add_argument('--%s' % var, default=wsp.get(var, raw=True))
     wsp_args, job_args = parser.parse_known_args(custom_args)
 
     # update workspace settings directly with command line values
     wsp.update(vars(wsp_args))
 
-    # get all workspace settings stored in a dict
-    # template strings will all be replaced with values
+    # store all workspace settings in a dict
+    # where variables are replaced with values
     context = wsp.get_settings()
 
     # export custom extensions to jinja context
@@ -124,67 +173,26 @@ def main():
     context.update(wsp.get_context_extensions())
 
     template_dir = wsp.abs_path('template_dir')
+    template_files = wsp.get('templates')
 
-    job_template_file = wsp.get('job_template_file')
-    job_template_path = os.path.join('jobs', job_template_file)
+    if wsp.get('exec_template', default=None):
+        template_files.append(wsp.get('exec_template'))
 
-    config_template_file = wsp.get('config_template_file')
-    config_template_path = os.path.join('configs', config_template_file)
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
 
-    try:
-        env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
-
-        # read job template as plain file and parse variables
-        job_template = env.loader.get_source(env, job_template_path)[0]
-        job_template_ast = env.parse(job_template)
-        # read config template as plain file and parse variables
-        config_template = env.loader.get_source(env, config_template_path)[0]
-        config_template_ast = env.parse(config_template)
-
-        job_vars    = meta.find_undeclared_variables(job_template_ast)
-        config_vars = meta.find_undeclared_variables(config_template_ast)
-        custom_vars = job_vars.union(config_vars)
-        custom_vars = custom_vars - set([name for name in __builtins__ if not name.startswith('_')])
-        custom_vars = custom_vars - set(context.keys())
-        
-        # search for job specific args in job script template
-        parser = argparse.ArgumentParser()
-        for var in custom_vars:
-            parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
-        # parse job specific args from command line
-        job_args = parser.parse_args(job_args)
-
-        context.update(vars(job_args))
-
-        # reload template file as template
-        job_template = env.get_template(job_template_path)
-        config_template = env.get_template(config_template_path)
-
-        if os.path.exists(wsp.get('job_path')):
-            logger.warning('replacing existing job script "{}"!'.format(wsp.get('job_path')))
-        if os.path.exists(wsp.get('config_path')):
-            logger.warning('replacing existing job config "{}"!'.format(wsp.get('config_path')))
-
-        # render and write job script file
-        with open(wsp.get('job_path'), 'w') as job:
-            job.write(job_template.render(**context))
-        # render and write config file
-        with open(wsp.get('config_path'), 'w') as config:
-            config.write(config_template.render(**context))
-
-    except jinja2.exceptions.UndefinedError as e:
-        logger.error('usage of undefined parameter "{}" in template!'.format(e.args[0]))
-        sys.exit(1)
-    except jinja2.exceptions.TemplateNotFound as e:
-        logger.error('template file "{}" not found!'.format(e.message))
-        sys.exit(1)
-
-    logger.info('created job script "{}"'.format(wsp.get('job_path')))
-    logger.info('created job config "{}"'.format(wsp.get('config_path')))
+    for template_file in template_files:
+        try:
+            save_job_file(env, template_file, context.copy())
+        except jinja2.exceptions.UndefinedError as e:
+            logger.error('usage of undefined parameter "{}" in template!'.format(e.message()))
+            sys.exit(1)
+        except jinja2.exceptions.TemplateNotFound as e:
+            logger.error('template file "{}" not found!'.format(e.message))
+            sys.exit(1)
 
     if args.schedule:
-        logger.info('scheduling run script "{}" for execution'.format(wsp.get('job_path')))
-        os.system(wsp['run_cmd'])
+        logger.info('scheduling job "{}" for execution'.format(wsp.get('job_name')))
+        os.system(wsp.get('run_cmd'))
 
 
 if __name__ == '__main__':

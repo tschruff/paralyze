@@ -17,10 +17,10 @@ from paralyze.core.algebra import AABB
 # === GENERAL ===
 
 # absolute path to input csb file(s)
-INPUT = '/Users/tobs/sciebo/Data/Bodies/trapping/beds/ln-8-1.6.csv'
+INPUT = '/Users/tobs/Programming/PlayGround/paralyze/simulation_step_49490.csv'
 
 # used to scale input to SI units, i.e. [m]
-SCALING_FACTOR = 0.001
+SCALING_FACTOR = 1
 
 # sieves to classify the grain sizes, in mm
 SIEVES = np.arange(0.25, 64.25, 0.5)

@@ -18,12 +18,11 @@ CONTEXT_EXTENSIONS_DIR = 'context_ext'
 
 class Workspace(object):
 
-    def __init__(self, path, auto_create=False, defaults=None, logger=None, log_level=logging.INFO):
+    def __init__(self, path, auto_create=False, defaults=None, main_logger=None, log_level=logging.INFO):
         # absolute path to workspace root folder
         self._root = path
 
         if not os.path.exists(self._root):
-            logger.error()
             raise IOError('No such file or directory {}'.format(self._root))
 
         settings_path = os.path.join(self._root, SETTINGS_DIR, SETTINGS_FILE)
@@ -32,8 +31,11 @@ class Workspace(object):
             if auto_create:
                 self.__create(defaults)
             else:
-                logger.error('')
                 raise RuntimeError('Directory {} is not a paralyze workspace'.format(self._root))
+
+        # init main logger
+        if main_logger:
+            self.init_logger(main_logger, log_level)
 
         # load raw dict (with raw template strings)
         self._raw = self.__load()
@@ -46,15 +48,11 @@ class Workspace(object):
         else:
             self._has_ext = False
 
-        # init main logger
-        if logger:
-            self.init_logger(logger, log_level)
-
     def __create(self, defaults=None):
         # create hidden settings folder
         settings_dir = os.path.join(self._root, SETTINGS_DIR)
         if not os.path.exists(settings_dir):
-            logger.debug('creating paralyze workspace at {}'.format(self._root))
+            logger.info('creating paralyze workspace at {}'.format(self._root))
             os.mkdir(settings_dir)
         # save settings to json file
         settings_path = os.path.join(settings_dir, SETTINGS_FILE)
@@ -77,17 +75,17 @@ class Workspace(object):
     def __str__(self):
         return str(self.get_settings())
 
-    def init_logger(self, logger, level=logging.INFO): 
+    def init_logger(self, main_logger, level=logging.INFO):
         # configure and add file handler
         file_h = logging.FileHandler(os.path.join(self.root, SETTINGS_DIR, LOG_FILE))
         file_h.setFormatter(logging.Formatter(LOG_FILE_FORMAT))
         file_h.setLevel(logging.DEBUG)
-        logger.addHandler(file_h)
+        main_logger.addHandler(file_h)
         # configure and add stream handler
         bash_h = logging.StreamHandler()
         bash_h.setFormatter(logging.Formatter(LOG_STREAM_FORMAT))
         bash_h.setLevel(level)
-        logger.addHandler(bash_h)
+        main_logger.addHandler(bash_h)
 
     @property
     def root(self):
@@ -128,8 +126,10 @@ class Workspace(object):
                 settings[key] = self.get(key)
         return settings
 
-    def keys(self):
-        return self._raw.keys()
+    def keys(self, private=True):
+        if private:
+            return self._raw.keys()
+        return [key for key in self._raw.keys() if not key.startswith('__')]
 
     def update(self, other):
         """ Updates items.
