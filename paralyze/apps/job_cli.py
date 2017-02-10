@@ -3,10 +3,10 @@ from paralyze.core import Workspace
 
 
 RUN_COMMANDS = {
-    'bluegene': 'llsubmit {job_path}',
+    'bluegene': 'llsubmit {run_dir}/{job_name}.sh',
     'lsf': 'bsub < {job_path}',
     'windows': '{job_path}',
-    'unix': '{job_path}',
+    'unix': 'sh {job_path}',
     'macOS': './{job_path}'
 }
 
@@ -19,7 +19,6 @@ DEFAULTS = {
     # job settings
     "job_type": "",
     "job_name": "",
-    "job_path": "",
 
     # all files that should be parsed for a job
     "templates": [],

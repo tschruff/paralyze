@@ -17,7 +17,7 @@ from paralyze.core.algebra import AABB
 # === GENERAL ===
 
 # absolute path to input csb file(s)
-INPUT = '/Users/tobs/Programming/PlayGround/paralyze/simulation_step_49490.csv'
+INPUT = '/Users/tobs/sciebo/Data/Bodies/640p/packed_ln-8-1.1-0.5.csv'
 
 # used to scale input to SI units, i.e. [m]
 SCALING_FACTOR = 1
