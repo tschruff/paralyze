@@ -1,14 +1,16 @@
 from paralyze import ARCH, VERSION
 from paralyze.core import Workspace
 
+from jinja2 import meta
+import os
+import ast
+import argparse
+import sys
+import logging
+import jinja2
 
-RUN_COMMANDS = {
-    'bluegene': 'llsubmit {run_dir}/{job_name}.sh',
-    'lsf': 'bsub < {job_path}',
-    'windows': '{job_path}',
-    'unix': 'sh {job_path}',
-    'macOS': './{job_path}'
-}
+logger = logging.getLogger(__name__)
+
 
 # default workspace settings
 DEFAULTS = {
@@ -16,35 +18,58 @@ DEFAULTS = {
     # general settings
     '__paralyze_version': VERSION,
 
+    "app_dir": "apps",
+    "app_file": "<not-set>",
+    "app_path": "{app_dir}/{app_file}",
+
     # job settings
     "job_type": "",
     "job_name": "",
 
+    "example_job_type": {
+        "app_file": "example_app",
+        "templates": {
+            "job": "example_job.sh",
+            "data": "example_data.dat"
+        }
+    },
+
     # all files that should be parsed for a job
-    "templates": [],
-    "exec_template": "",
+    "templates": {
+        "job": "job.sh",
+        "config": "config.prm"
+    },
+
+    # the paths of files specified by template
+    # paths will be filled out during the file generation process automatically
+    # you can access them in template files like so
+    # {{ files.job }} or {{ files['job'] }}
+    "files": {
+        "job": "",
+        "config": ""
+    },
 
     # optional folder to store template files to
     "template_dir": "",
 
     # optional folder to store files for execution
     "run_dir": "",
-
     # job execution command (may depend on system architecture)
-    'run_cmd': RUN_COMMANDS[ARCH]
+    'run_cmd': "echo {files[job]}"
 }
 
 
-def get_template_variables(env, template_file, context):
+def get_template_variables(env, template_key, context):
     """ Read template_file as plain file and parse variables
 
     :param env:
-    :param template_file: path to template file
+    :param template_key: name of template
     :param context:
     :return: list of template variables (strings)
     """
+    template_file = context["templates"][template_key]
     template = env.loader.get_source(env, template_file)[0]
-    template_ast = env.parse(job_template)
+    template_ast = env.parse(template)
 
     template_vars = meta.find_undeclared_variables(template_ast)
     # substract builtin names
@@ -55,7 +80,7 @@ def get_template_variables(env, template_file, context):
     return template_vars
 
 
-def save_job_file(env, template_file, context):
+def save_job_file(args, env, template_key, context):
     """ Parses template variables from template_file and
     adds them as argument to the command line. Rendered files
     will be saved to <run_dir>/<job_name>.<suffix_of_template_file>
@@ -63,25 +88,24 @@ def save_job_file(env, template_file, context):
     Note: Existing files will be overridden.
 
     :param env:
-    :param template_file: path to template file
+    :param template_key: name of template
     :param context:
     :return: None
     """
-    template_vars = get_template_variables(env, template_file, context)
+    template_vars = get_template_variables(env, template_key, context)
     # search for job specific args in job script template
     parser = argparse.ArgumentParser()
     for var in template_vars:
         parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
     # parse job specific args from command line
-    job_args, other_args = parser.parse_known_args(job_args)
+    job_args, other_args = parser.parse_known_args(args)
 
     context.update(vars(job_args))
 
     # load template file
-    template = env.get_template(job_template_path)
+    template = env.get_template(context["templates"][template_key])
 
-    suffix = template_file[template_file.rfind('.'):]
-    out_file = os.path.join(wsp.get('run_dir'), wsp.get('job_name') + suffix)
+    out_file = context["files"][template_key]
     if os.path.exists(out_file):
         logger.warning('Replacing existing file "{}"!'.format(out_file))
 
@@ -93,18 +117,15 @@ def save_job_file(env, template_file, context):
     logger.info('Created file "{}"'.format(out_file))
 
 
+def generate_file_paths(wsp):
+    wsp['files'] = {}
+    for key in wsp['templates'].keys():
+        template_file = wsp['templates'][key]
+        suffix = template_file[template_file.rfind('.'):]
+        wsp['files'][key] = os.path.join(wsp['run_dir'], wsp['job_name'] + suffix)
+
+
 def main():
-
-    import ast
-    import argparse
-    import os
-    import sys
-    import logging
-
-    from jinja2 import meta
-    import jinja2
-
-    logger = logging.getLogger(__name__)
 
     parser = argparse.ArgumentParser()
 
@@ -154,8 +175,12 @@ def main():
     # update workspace settings directly with command line values
     wsp.update(vars(wsp_args))
 
-    # store all workspace settings in a dict
+    # generates a file path for each item in "templates" to the context
+    generate_file_paths(wsp)
+
+    # export all workspace settings to a dict
     # where variables are replaced with values
+    # NOTE: No more updates of workspace variables hereafter!
     context = wsp.get_settings()
 
     # export custom extensions to jinja context
@@ -168,30 +193,26 @@ def main():
         'root_path': wsp.root
     }
 
+    # add app specific context extensions
     context.update(context_extensions)
+    # add user specific context extensions
     context.update(wsp.get_context_extensions())
 
-    template_dir = wsp.abs_path('template_dir')
-    template_files = wsp.get('templates')
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(wsp.abs_path('template_dir')))
 
-    if wsp.get('exec_template', default=None):
-        template_files.append(wsp.get('exec_template'))
-
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir))
-
-    for template_file in template_files:
+    for template_key in context['templates'].keys():
         try:
-            save_job_file(env, template_file, context.copy())
+            save_job_file(job_args, env, template_key, context)
         except jinja2.exceptions.UndefinedError as e:
-            logger.error('usage of undefined parameter "{}" in template!'.format(e.message()))
+            logger.error('usage of undefined parameter "{}" in template "{}"!'.format(e.message(), template_key))
             sys.exit(1)
         except jinja2.exceptions.TemplateNotFound as e:
-            logger.error('template file "{}" not found!'.format(e.message))
+            logger.error('template file "{}" not found for template "{}"!'.format(e.message, template_key))
             sys.exit(1)
 
     if args.schedule:
-        logger.info('scheduling job "{}" for execution'.format(wsp.get('job_name')))
-        os.system(wsp.get('run_cmd'))
+        logger.info('scheduling job "{}" for execution'.format(context['job_name']))
+        os.system(context['run_cmd'])
 
 
 if __name__ == '__main__':
