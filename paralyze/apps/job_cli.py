@@ -26,18 +26,10 @@ DEFAULTS = {
     "job_type": "",
     "job_name": "",
 
-    "example_job_type": {
-        "app_file": "example_app",
-        "templates": {
-            "job": "example_job.sh",
-            "data": "example_data.dat"
-        }
-    },
-
     # all files that should be parsed for a job
     "templates": {
-        "job": "job.sh",
-        "config": "config.prm"
+        "job": "<not-set>.sh",
+        "config": "<not-set>.prm"
     },
 
     # the paths of files specified by template
@@ -55,27 +47,24 @@ DEFAULTS = {
     # optional folder to store files for execution
     "run_dir": "",
     # job execution command (may depend on system architecture)
-    'run_cmd': "echo {files[job]}"
+    'schedule_cmd': "echo {files[job]}"
 }
 
 
-def get_template_variables(env, template_key, context):
+def get_template_variables(env, template_file):
     """ Read template_file as plain file and parse variables
 
     :param env:
     :param template_key: name of template
-    :param context:
     :return: list of template variables (strings)
     """
-    template_file = context["templates"][template_key]
     template = env.loader.get_source(env, template_file)[0]
     template_ast = env.parse(template)
 
     template_vars = meta.find_undeclared_variables(template_ast)
-    # substract builtin names
-    template_vars = template_vars - set([name for name in __builtins__ if not name.startswith('_')])
-    # and names that already exist in the global context
-    template_vars = template_vars - set(context.keys())
+
+    for ref_template in meta.find_referenced_templates(template_ast):
+        template_vars.update(get_template_variables(env, ref_template))
 
     return template_vars
 
@@ -92,16 +81,6 @@ def save_job_file(args, env, template_key, context):
     :param context:
     :return: None
     """
-    template_vars = get_template_variables(env, template_key, context)
-    # search for job specific args in job script template
-    parser = argparse.ArgumentParser()
-    for var in template_vars:
-        parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
-    # parse job specific args from command line
-    job_args, other_args = parser.parse_known_args(args)
-
-    context.update(vars(job_args))
-
     # load template file
     template = env.get_template(context["templates"][template_key])
 
@@ -123,6 +102,10 @@ def generate_file_paths(wsp):
         template_file = wsp['templates'][key]
         suffix = template_file[template_file.rfind('.'):]
         wsp['files'][key] = os.path.join(wsp['run_dir'], wsp['job_name'] + suffix)
+
+
+def create_env(wsp):
+    return jinja2.Environment(loader=jinja2.FileSystemLoader(wsp.get('template_dir')))
 
 
 def main():
@@ -163,7 +146,7 @@ def main():
         # possibly overriding global settings!
         wsp.update(wsp.get(args.job_type, default={}))
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(allow_abbrev=False)
     # add workspace variables as required command line arguments
     for var in wsp.variables():
         parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
@@ -177,6 +160,9 @@ def main():
 
     # generates a file path for each item in "templates" to the context
     generate_file_paths(wsp)
+
+    # create jinja environemt for template loading
+    env = create_env(wsp)
 
     # export all workspace settings to a dict
     # where variables are replaced with values
@@ -198,21 +184,56 @@ def main():
     # add user specific context extensions
     context.update(wsp.get_context_extensions())
 
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(wsp.abs_path('template_dir')))
+
+    ########################################
+    # Collect and parse template variables #
+    ########################################
+
+    template_vars = set([])
+    for template_key in context['templates'].keys():
+        template_file = context["templates"][template_key]
+        var = get_template_variables(env, template_file)
+        template_vars.update(var)
+
+    # substract builtin names
+    template_vars = template_vars - set([name for name in __builtins__ if not name.startswith('_')])
+    # and names that already exist in the global context
+    template_vars = template_vars - set(context.keys())
+
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+    for var in template_vars:
+        parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
+    # parse template args from command line
+    job_args = parser.parse_args(job_args)
+    # and add them to the context
+    context.update(vars(job_args))
+
+
+    #######################
+    # Save template files #
+    #######################
 
     for template_key in context['templates'].keys():
         try:
             save_job_file(job_args, env, template_key, context)
         except jinja2.exceptions.UndefinedError as e:
-            logger.error('usage of undefined parameter "{}" in template "{}"!'.format(e.message(), template_key))
+            logger.error('usage of undefined parameter "{}" in template "{}"!'.format(e.message, template_key))
             sys.exit(1)
         except jinja2.exceptions.TemplateNotFound as e:
             logger.error('template file "{}" not found for template "{}"!'.format(e.message, template_key))
             sys.exit(1)
+        except jinja2.exceptions.TemplateSyntaxError as e:
+            logger.error('syntak error in template "{}": {}'.format(template_key, e.message))
+            sys.exit(1)
+
+
+    ################
+    # Schedule job #
+    ################
 
     if args.schedule:
         logger.info('scheduling job "{}" for execution'.format(context['job_name']))
-        os.system(context['run_cmd'])
+        os.system(context['schedule_cmd'])
 
 
 if __name__ == '__main__':
