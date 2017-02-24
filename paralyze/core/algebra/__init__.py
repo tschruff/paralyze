@@ -3,6 +3,7 @@ from .factorization import factors, factors2D, factors3D
 from .frames import ReferenceFrame
 from .interval import Interval
 from .primes import primeFactors, primes, isPrime
+from .quaternion import Quaternion
 from .ray import Ray
 from .sort import get_bucket_indexes
 from .vector import Vector
@@ -13,6 +14,7 @@ __all__ = [
     'ReferenceFrame',
     'Interval',
     'primeFactors', 'primes', 'isPrime',
+    'Quaternion',
     'Ray',
     'get_bucket_indexes',
     'Vector'

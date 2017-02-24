@@ -1,6 +1,6 @@
-from paralyze.core.utils import vtk as vtk_utils
+from paralyze.core.io import vtk as vtk_utils
 from paralyze.core.field import io as field_io
-from paralyze.core.utils import xml as xml_utils
+from paralyze.core.io import xml as xml_utils
 
 from xml.etree import ElementTree
 
@@ -17,7 +17,7 @@ def save_field_as_vtk_image_file(block, blocks, field_id, abs_folder_path, binar
         os.mkdir(abs_folder_path)
 
     if binary:
-        print('WARNING: Binary utils output is currently not supported. Switching to ascii mode!')
+        print('WARNING: Binary io output is currently not supported. Switching to ascii mode!')
         binary = False
 
     abs_file_path = os.path.join(abs_folder_path, field_id)

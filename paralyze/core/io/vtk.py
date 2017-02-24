@@ -14,9 +14,9 @@ NUMPY_TO_VTK_DTYPE_STR = {'int8': 'Int8',
 
 
 def vtk_dtype_str(np_dtype):
-    """ Maps numpy data types (dtypes) to a string representation of the respective utils data type.
+    """ Maps numpy data types (dtypes) to a string representation of the respective io data type.
 
-    utils types: Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64
+    io types: Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64
     :rtype: str
     """
     return NUMPY_TO_VTK_DTYPE_STR[np.dtype(np_dtype).name]

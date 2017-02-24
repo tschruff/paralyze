@@ -94,8 +94,8 @@ def classify(grain_size, sieves):
 
 def volume(diameter):
     """
-    :param body:
-    :return: The volume of the body in cubic-m
+    :param bodies:
+    :return: The volume of the bodies in cubic-m
     """
     return 4.0/3 * math.pi * (diameter / 2.0) ** 3
 

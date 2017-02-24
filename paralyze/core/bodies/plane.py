@@ -11,7 +11,7 @@ class Plane(Body):
     def __str__(self):
         return 'Plane(id=%s, pos=%s, normal=%s)' % (str(self.id()), self.position(), self.normal())
 
-    def characteristic_size(self):
+    def equivalent_mesh_size(self):
         return 0.0
 
     def contains(self, point):

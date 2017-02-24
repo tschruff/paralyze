@@ -13,12 +13,13 @@ class BlockStorage(object):
     def __getstate__(self):
         """ The __getstate__ is called when the BlockStorage is send to other
         processes, i.e. when the execute method is called and the BlockStorage is
-        passed to worker processes. To prevent copies of all blocks for each worker
-        process, we replace the _blocks member from the instance __dict__ with a list
-        of empty blocks (None values). This causes all member functions that access
-        the _blocks member to return empty (None) blocks instead.
+        passed to worker processes. To prevent unnecessary copies of block data on
+        each worker process, we replace non-local blocks from the instance
+        __dict__ with empty blocks, i.e. None values.
+        This causes all member functions that access non-local blocks to return
+        None instead.
 
-        :return: The current state of the BlockStorage instance with empty blocks.
+        :return: The current state of the BlockStorage instance with empty non-local blocks.
         """
         state = {key: value for key, value in self.__dict__.items() if key != '_blocks'}
         state['_blocks'] = [None for _ in range(len(self._blocks))]
@@ -28,7 +29,7 @@ class BlockStorage(object):
         return iter(self._blocks)
 
     def __getitem__(self, identifier):
-        return [block[identifier] if block is not None else None for block in self._blocks]
+        return [block.get(identifier, None) for block in self._blocks]
 
     def __len__(self):
         return len(self._blocks)
@@ -40,9 +41,8 @@ class BlockStorage(object):
         return identifier in self._ids
 
     def exec(self, func, join_func=None, **kwargs):
-        # TODO: Find a better solution for this
         if mp.current_process().name != 'MainProcess':
-            raise mp.ProcessError('exec may only be called on the main process')
+            raise mp.ProcessError('BlockStorage.exec may only be called on the main process')
         kwargs = kwargs or {}
         with mp.Pool(self.np()) as pool:
             result = pool.map(partial(func, **kwargs), self)
@@ -67,4 +67,4 @@ class BlockStorage(object):
             # TODO: do some more checking?
             if block is None:
                 continue
-            self._blocks[block.id()] = block
+            self._blocks[block.id] = block

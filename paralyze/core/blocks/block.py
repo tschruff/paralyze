@@ -11,5 +11,9 @@ class Block(object):
     def __getitem__(self, identifier):
         return self._data[identifier]
 
+    def get(self, identifier, default=None):
+        return self._data.get(identifier, default)
+
+    @property
     def id(self):
         return self._id

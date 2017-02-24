@@ -1,5 +1,5 @@
 from paralyze import ARCH, VERSION
-from paralyze.core import Workspace
+from paralyze.core import Workspace, type_cast
 
 from jinja2 import meta
 import os
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 DEFAULTS = {
 
     # general settings
-    '__paralyze_version': VERSION,
+    '__paralyze_version__': VERSION,
 
     "app_dir": "apps",
     "app_file": "<not-set>",
@@ -86,7 +86,7 @@ def save_job_file(args, env, template_key, context):
 
     out_file = context["files"][template_key]
     if os.path.exists(out_file):
-        logger.warning('Replacing existing file "{}"!'.format(out_file))
+        logger.warning('replacing existing file "{}"!'.format(out_file))
 
     # render and write file
     with open(out_file, 'w') as job:
@@ -111,10 +111,8 @@ def create_env(wsp):
 def main():
 
     parser = argparse.ArgumentParser()
-
     # add job_cli arguments
-    parser.add_argument('--job-type', default="", dest='job_type')
-    parser.add_argument('--create-workspace', action='store_true', default=False, dest='create_workspace')
+    parser.add_argument('--create_workspace', action='store_true', default=False, dest='create_workspace')
     parser.add_argument('--schedule', action='store_true', default=False, help='schedule job after creation?')
     parser.add_argument('--verbose', action='store_true', default=False)
 
@@ -124,39 +122,19 @@ def main():
 
     # create workspace and exit
     if args.create_workspace:
-        wsp = Workspace(os.getcwd(), True, DEFAULTS)
-        print('Info: created new workspace at {}'.format(wsp.root))
+        wsp = Workspace(auto_create=True, settings=DEFAULTS)
+        logger.info('created new workspace at {}'.format(wsp.root))
         sys.exit(0)
-    elif not args.job_type:
-        print('Error: either --job-type or --create-workspace must be given')
-        sys.exit(1)
 
-    # load existing workspace
+    # load workspace at CWD
     try:
-        wsp = Workspace(os.getcwd(), False, main_logger=logger, log_level=log_level)
-    except RuntimeError as e:
-        print('Error: Directory {} is not a paralyze workspace'.format(os.getcwd()))
-        print('Run "{} --create-workspace" first to create a workspace here'.format(sys.argv[0]))
+        wsp = Workspace(auto_create=False, log_level=log_level)
+        job_args = wsp.init_variables(custom_args)
+    except IOError as e:
+        logger.error('directory {} is not a paralyze workspace!\n '
+                     'Note: run "{} --create-workspace" to create '
+                     'a workspace at the current working directory'.format(wsp.root, sys.argv[0]))
         sys.exit(1)
-
-    if args.job_type:
-        # add job_type to workspace
-        wsp.update({'job_type': args.job_type})
-        # and export job_type specific settings to global settings namespace
-        # possibly overriding global settings!
-        wsp.update(wsp.get(args.job_type, default={}))
-
-    parser = argparse.ArgumentParser(allow_abbrev=False)
-    # add workspace variables as required command line arguments
-    for var in wsp.variables():
-        parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
-    # add workspace keys as optional command line arguments
-    for var in wsp.keys(private=False):
-        parser.add_argument('--%s' % var, default=wsp.get(var, raw=True))
-    wsp_args, job_args = parser.parse_known_args(custom_args)
-
-    # update workspace settings directly with command line values
-    wsp.update(vars(wsp_args))
 
     # generates a file path for each item in "templates" to the context
     generate_file_paths(wsp)
@@ -184,11 +162,7 @@ def main():
     # add user specific context extensions
     context.update(wsp.get_context_extensions())
 
-
-    ########################################
-    # Collect and parse template variables #
-    ########################################
-
+    # Collect and parse template variables
     template_vars = set([])
     for template_key in context['templates'].keys():
         template_file = context["templates"][template_key]
@@ -202,17 +176,13 @@ def main():
 
     parser = argparse.ArgumentParser(allow_abbrev=False)
     for var in template_vars:
-        parser.add_argument('--%s' % var, required=True, type=ast.literal_eval)
+        parser.add_argument('--%s' % var, required=True, type=type_cast)
     # parse template args from command line
     job_args = parser.parse_args(job_args)
     # and add them to the context
     context.update(vars(job_args))
 
-
-    #######################
-    # Save template files #
-    #######################
-
+    # Save template files
     for template_key in context['templates'].keys():
         try:
             save_job_file(job_args, env, template_key, context)
@@ -226,11 +196,7 @@ def main():
             logger.error('syntak error in template "{}": {}'.format(template_key, e.message))
             sys.exit(1)
 
-
-    ################
-    # Schedule job #
-    ################
-
+    # Schedule job
     if args.schedule:
         logger.info('scheduling job "{}" for execution'.format(context['job_name']))
         os.system(context['schedule_cmd'])

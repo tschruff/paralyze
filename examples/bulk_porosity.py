@@ -1,11 +1,11 @@
 #!/usr/local/bin/python3
 
-from PydroSquid.core.blocks import UniformBlockStorage
-from PydroSquid.core.body import Sphere
-from PydroSquid.core.body.io.csb import CSBFile
+from paralyze.core.blocks import UniformBlockStorage
+from paralyze.core.bodies import Sphere
+from paralyze.core.bodies.io.csb import CSBFile
 
-from PydroSquid.processing.body.mapping import map_bodies_to_field
-from PydroSquid.processing.field.io import save_field
+from paralyze.analysis.body.mapping import map_bodies_to_field
+from paralyze.analysis.field.io import save_field
 
 import os
 
@@ -30,11 +30,11 @@ def main():
     print('Loaded %d bodies from input file' % len(bodies))
     print()
 
-    blocks.addBodies('body', blocks.clipToDomain(bodies))
+    blocks.addBodies('bodies', blocks.clipToDomain(bodies))
 
     total = 0
     for block in blocks:
-        bodies = block['body']
+        bodies = block['bodies']
         bodies.print_stats()
         print()
         total += len(bodies)
@@ -42,7 +42,7 @@ def main():
     print()
 
     blocks.addField(INPUT, np.uint8)
-    blocks.exec(map_bodies_to_field, blocks=blocks, bodies_id='body', field_id=INPUT, solid_value=1)
+    blocks.exec(map_bodies_to_field, blocks=blocks, bodies_id='bodies', field_id=INPUT, solid_value=1)
 
     solids = sum(np.count_nonzero(field.data) for field in blocks[INPUT])
     totals = blocks.numCells().prod()

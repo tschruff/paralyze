@@ -1,12 +1,14 @@
-from .algebra import AABB, Vector
-from .body import Body, Bodies, CSBFile
-from .body import Capsule, Plane, Sphere
+from .algebra import AABB, Interval, Vector
+from .bodies import Body, Bodies, CSBFile
+from .bodies import Capsule, Plane, Sphere
+from .field import Cell, CellInterval
 from .rdict import rdict
-from .session import get_input
+from .cli_ext import get_input, type_cast
 from .workspace import Workspace
 
 __all__ = [
     'AABB',
+    'Interval',
     'Vector',
     'Body',
     'Bodies',
@@ -14,7 +16,8 @@ __all__ = [
     'Capsule',
     'Plane',
     'Sphere',
+    'Cell', 'CellInterval',
     'rdict',
-    'get_input',
+    'get_input', 'type_cast',
     'Workspace'
 ]

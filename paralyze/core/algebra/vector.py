@@ -1,9 +1,13 @@
+from ..parsable import Parsable
+
 import numpy as np
 
 
-class Vector(np.ndarray):
+class Vector(np.ndarray, Parsable):
     """ The Vector class represents a 3D vector.
 
+    >>> v = Vector("<-inf, .45, 34.5>")
+    Vector(-inf, 0.45, 34.5)
     >>> v = Vector(3)
     Vector(3, 3, 3)
     >>> v = Vector((1, 2, 1))
@@ -11,12 +15,16 @@ class Vector(np.ndarray):
 
     """
 
-    def __new__(cls, v):
-        if not hasattr(v, '__len__'):
-            v = (v, v, v)
-        elif len(v) != 3:
-            raise IndexError('Vector can only be initialized with a number of a 3D tuple/list')
-        return np.asarray(v).view(cls)
+    Pattern = r"\A(?P<value><{0},{0},{0}>)\Z".format(Parsable.Decimal)
+
+    def __new__(cls, value):
+        if isinstance(value, str):
+            value = tuple(map(float, value.replace('<', '').replace('>', '').split(',')))
+        elif not hasattr(value, '__len__'):
+            value = (value, value, value)
+        elif len(value) != 3:
+            raise IndexError('Vector can only be initialized with a single number or a 3D tuple/list')
+        return np.asarray(value).view(cls)
 
     def __len__(self):
         return 3
@@ -63,22 +71,6 @@ class Vector(np.ndarray):
 
     def normalized(self):
         return self / self.length()
-
-    @staticmethod
-    def parse(string):
-        # remove all kinds of whitespaces
-        string = ''.join(string.split())
-        if string[0] != '<' or string[-1] != '>':
-            raise ValueError('Invalid Vector string')
-
-        string = string.replace('<', '').replace('>', '')
-        values = string.split(',')
-
-        if len(values) != 3:
-            raise ValueError('Invalid Vector string')
-
-        values = tuple(map(float, values))
-        return Vector(values)
 
     def sqr_length(self):
         return np.dot(self, self)

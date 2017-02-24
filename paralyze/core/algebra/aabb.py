@@ -1,12 +1,16 @@
+from ..parsable import Parsable
 from .vector import Vector
 
 import numpy as np
 
 
-class AABB(object):
+class AABB(Parsable):
     """ Implements a half-open interval (min corner is included, max corner is excluded)
 
     """
+
+    # re pattern that matches a valid AABB object (whitespaces removed)
+    Pattern = r"\A\[(?P<min_corner><{0},{0},{0}>),(?P<max_corner><{0},{0},{0}>)\]\Z".format(Parsable.Decimal)
 
     def __init__(self, min_corner=(0, 0, 0), max_corner=None):
         if max_corner is None:
@@ -116,18 +120,6 @@ class AABB(object):
         assert isinstance(other, AABB)
         return AABB(np.minimum(self.min, other.min), np.maximum(self.max, other.max))
 
-    @staticmethod
-    def parse(string):
-        # remove all kinds of whitespaces
-        string = ''.join(string.split())
-        if string[0:2] != '[<' or string[-2:] != '>]':
-            raise ValueError('Invalid AABB string')
-
-        string = string.replace('[', '').replace(']', '').replace('<', '').replace('>', '')
-        values = list(map(float, string.split(',')))
-
-        return AABB(Vector(values[:3]), Vector(values[3:]))
-
     def shifted(self, delta):
         return AABB(self.min + delta, self.max + delta)
 
@@ -142,4 +134,8 @@ class AABB(object):
     @property
     def size(self):
         return self.max - self.min
+
+    @property
+    def volume(self):
+        return np.prod(self.size)
 

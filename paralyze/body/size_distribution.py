@@ -1,4 +1,4 @@
-from paralyze.core.body import Sphere
+from paralyze.core.bodies import Sphere
 from paralyze.core.algebra import Interval
 
 import numpy as np
@@ -27,7 +27,7 @@ def sieveEquivalentBodySize(body):
     if isinstance(body, Sphere):
         return 2. * body.radius()
     else:
-        raise NotImplemented('sieveEquivalentBodySize not implemented for body of type %s' % type(body))
+        raise NotImplemented('sieveEquivalentBodySize not implemented for bodies of type %s' % type(body))
 
 
 def createSizeDistribution(bodies, sieves, mapping_func=lambda body: 1):
@@ -35,7 +35,7 @@ def createSizeDistribution(bodies, sieves, mapping_func=lambda body: 1):
 
     :param bodies: Set of bodies to create size distribution for
     :param sieves: Set of sieves to use for classification
-    :param mapping_func: Function that adds the body dependend numeric value to the size class
+    :param mapping_func: Function that adds the bodies dependend numeric value to the size class
     :return:
     """
     sieves_count = len(sieves)

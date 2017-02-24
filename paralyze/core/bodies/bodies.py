@@ -76,7 +76,7 @@ class Bodies(set):
 
         :param domain:
         :type domain: AABB
-        :param strict: whether body center (False) or the whole body (True) is tested to be inside in the given domain
+        :param strict: whether bodies center (False) or the whole bodies (True) is tested to be inside in the given domain
         :type strict: bool
         :returns: subset to bodies that is inside the given domain
         """

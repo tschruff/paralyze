@@ -26,7 +26,7 @@ class Sphere(Body):
     def aabb(self):
         return AABB(self.position() - Vector(self._r), self.position() + Vector(self._r))
 
-    def characteristic_size(self):
+    def equivalent_mesh_size(self):
         return self.radius() * 2.0
 
     def contains(self, point):

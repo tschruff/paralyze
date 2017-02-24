@@ -4,11 +4,11 @@ import multiprocessing as mp
 
 import numpy as np
 
-from PydroSquid.core.algebra import AABB, Vector
-from PydroSquid.core.blocks import Block, BlockStorage
-from PydroSquid.core.body import Bodies
-from PydroSquid.core.field import Cell, CellInterval, Field
-from core.algebra.factorization import factors
+from paralyze.core.algebra import AABB, Vector
+from paralyze.core.blocks import Block, BlockStorage
+from paralyze.core.bodies import Bodies
+from paralyze.core.field import Cell, CellInterval, Field
+from paralyze.core.algebra.factorization import factors
 
 
 class UniformBlock(Block):
@@ -38,9 +38,9 @@ class UniformBlock(Block):
         """
         bodies = Bodies(bodies)
 
-        # create set of local body (body whose center belongs to the current block)
+        # create set of local bodies (bodies whose center belongs to the current block)
         local_bodies = bodies.subset(lambda body: self.domain().contains(body.center()))
-        # create non-local set of body
+        # create non-local set of bodies
         non_local_bodies = bodies.difference(local_bodies)
 
         shadows = set()
@@ -99,7 +99,6 @@ class UniformBlockStorage(BlockStorage):
         self._domain = AABB(self._origin, self._origin + self.dx() * self._cellBB.size)
 
         self._fieldIds = []
-
         self._setup_blocks()
 
     def addBodies(self, identifier, bodies):

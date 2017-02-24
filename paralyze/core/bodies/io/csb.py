@@ -1,4 +1,4 @@
-from paralyze.core.body import Bodies, Plane, Sphere
+from paralyze.core.bodies import Bodies, Plane, Sphere
 from paralyze.core.algebra import Vector
 
 import glob

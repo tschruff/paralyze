@@ -1,12 +1,20 @@
+from ..parsable import Parsable
+
 import numpy as np
 
 
-class Cell(np.ndarray):
+class Cell(np.ndarray, Parsable):
 
-    def __new__(cls, c):
-        if not hasattr(c, '__len__'):
-            c = (c, c, c)
-        return np.asarray(c, np.int64).view(cls)
+    Pattern = r"\A(?P<value>\({0},{0},{0}\))\Z".format(Parsable.Integer)
+
+    def __new__(cls, value):
+        if isinstance(value, str):
+            value = tuple(map(int, value.replace('(', '').replace(')', '').split(',')))
+        elif not hasattr(value, '__len__'):
+            value = (value, value, value)
+        elif len(value) != 3:
+            raise IndexError('Cell can only be initialized with a single number or a 3D tuple/list')
+        return np.asarray(value, np.int64).view(cls)
 
     def __eq__(self, other):
         return np.array_equal(self, other)
@@ -33,7 +41,9 @@ class Cell(np.ndarray):
         return self[2]
 
 
-class CellInterval(object):
+class CellInterval(Parsable):
+
+    Pattern = r"\A\[(?P<min_cell>\({0},{0},{0}\))\.\.\.(?P<max_cell>\({0},{0},{0}\))\]\Z".format(Parsable.Integer)
 
     def __init__(self, min_cell=(0, 0, 0), max_cell=None):
         if max_cell is None:
@@ -51,7 +61,7 @@ class CellInterval(object):
         return not self == other
 
     def __len__(self):
-        return self.numCells
+        return self.num_cells
 
     def __contains__(self, item):
         return self.contains(item)
@@ -97,7 +107,7 @@ class CellInterval(object):
         return self._max
 
     @property
-    def numCells(self):
+    def num_cells(self):
         return self.size.prod()
 
     @property

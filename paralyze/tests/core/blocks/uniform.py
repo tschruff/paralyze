@@ -13,14 +13,14 @@ class UniformBlockStorageTests(unittest.TestCase):
         blocks = UniformBlockStorage((100, 100, 100), 4)
         domain = AABB((0, 0, 0), (100, 100, 100))
 
-        self.assertEqual(blocks.numCells().prod(), 1000000)
+        self.assertEqual(blocks.num_cells().prod(), 1000000)
         self.assertEqual(blocks.np(), 4)
         self.assertEqual(blocks.globalDomain(), domain)
         self.assertEqual(blocks.numBlocks().prod(), 4)
         self.assertFalse(blocks.is_x_periodic())
         self.assertFalse(blocks.is_y_periodic())
         self.assertFalse(blocks.is_z_periodic())
-        self.assertEqual(blocks.mapDomainToCellInterval(domain).numCells(), 1000000)
+        self.assertEqual(blocks.mapDomainToCellInterval(domain).num_cells(), 1000000)
         self.assertEqual(blocks.globalCellInterval().min, (0, 0, 0))
         self.assertEqual(blocks.globalCellInterval().max, (99, 99, 99))
         self.assertEqual(blocks.cellCenter(Cell(49)), (49.5, 49.5, 49.5))
@@ -52,7 +52,7 @@ class UniformBlockStorageTests(unittest.TestCase):
 
         blocks = UniformBlockStorage((10, 10, 10), 1)
         sphere = Sphere((5, 5, 5), 5)
-        blocks.addBodies('body', {sphere, })
+        blocks.addBodies('bodies', {sphere, })
 
         self.assertEqual(sphere.aabb(), AABB((0, 0, 0), (10, 10, 10)))
 
@@ -65,8 +65,8 @@ class UniformBlockStorageTests(unittest.TestCase):
         blocks = UniformBlockStorage((25, 50, 50), (2, 1, 1), periodicity=(True, True, True))
 
         sphere = Sphere((0, 0, 0), 10)
-        blocks.addBodies('body', {sphere, })
-        for bodies in blocks['body']:
+        blocks.addBodies('bodies', {sphere, })
+        for bodies in blocks['bodies']:
             self.assertEqual(len(bodies), 4)
 
             for body in bodies:
@@ -80,9 +80,9 @@ class UniformBlockStorageTests(unittest.TestCase):
 
         blocks = UniformBlockStorage((25, 50, 50), (2, 1, 1))
         sphere = Sphere((25, 25, 25), 10)
-        blocks.addBodies('body', {sphere, })
+        blocks.addBodies('bodies', {sphere, })
 
-        for bodies in blocks['body']:
+        for bodies in blocks['bodies']:
             self.assertEqual(len(bodies), 1)
             for body in bodies:
                 if body.is_shadow_copy():

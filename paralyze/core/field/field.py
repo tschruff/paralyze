@@ -1,4 +1,4 @@
-from PydroSquid.core.field import Cell, CellInterval
+from .cell import Cell, CellInterval
 
 import numpy as np
 

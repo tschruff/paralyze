@@ -1,5 +1,5 @@
 from paralyze.core.algebra import AABB, Vector
-from paralyze.core.body import *
+from paralyze.core.bodies import *
 
 import unittest
 

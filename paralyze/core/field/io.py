@@ -1,6 +1,6 @@
-from PydroSquid.core.field import CellInterval
-from PydroSquid.core.utils import vtk as vtk_utils
-from PydroSquid.core.utils import xml as xml_utils
+from .cell import CellInterval
+from paralyze.core.io import vtk as vtk_utils
+from paralyze.core.io import xml as xml_utils
 
 from xml.etree import ElementTree
 

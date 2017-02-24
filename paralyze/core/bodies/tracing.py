@@ -1,5 +1,5 @@
-from PydroSquid.core.algebra import Ray, AABB
-from PydroSquid.core.body import Plane, Sphere
+from paralyze.core.algebra import AABB
+from paralyze.core.bodies import Plane, Sphere
 
 import math
 

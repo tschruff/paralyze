@@ -1,4 +1,4 @@
-from PydroSquid.core.algebra import AABB, Vector
+from paralyze.core.algebra import AABB, Vector
 
 import unittest
 import math
