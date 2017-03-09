@@ -231,7 +231,7 @@ def main():
     # and names that already exist in the global context
     template_vars = template_vars - set(context.keys())
 
-    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser = argparse.ArgumentParser()
     for var in template_vars:
         parser.add_argument('--%s' % var, required=True, type=type_cast)
     # parse template args from command line
