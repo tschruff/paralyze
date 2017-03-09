@@ -1,5 +1,4 @@
 from .body import Body
-from csg.core import CSG
 
 import math
 
@@ -18,12 +17,6 @@ class Capsule(Body):
 
     def __str__(self):
         return 'Capsule(id=%s, center=%s, radius=%f, length=%f)' % (self.id(), self.position(), self._r, self._l)
-
-    def csg(self):
-        capsule = CSG.cylinder(start=self.start().tolist(), end=self.end().tolist(), radius=self._r)
-        capsule = capsule.union(CSG.sphere(center=self.start().tolist(), radius=self._r))
-        capsule = capsule.union(CSG.sphere(center=self.end().tolist(), radius=self._r))
-        return capsule
 
     def contains(self, point):
         pass

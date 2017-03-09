@@ -1,5 +1,4 @@
 from .body import Body
-from csg.core import CSG
 
 import math
 
@@ -18,9 +17,6 @@ class Cylinder(Body):
 
     def __str__(self):
         return 'Cylinder(id=%s, center=%s, radius=%f, length=%f)' % (self.id(), self.position(), self._r, self._l)
-
-    def csg(self):
-        return CSG.cylinder(start=self.start().tolist(), end=self.end().tolist(), radius=self._r)
 
     def contains(self, point):
         pass

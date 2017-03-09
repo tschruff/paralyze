@@ -1,8 +1,5 @@
 from ..algebra import AABB, Vector
 from .body import Body
-from .bodystorage import BodyStorage
-
-from csg.core import CSG
 
 
 class Sphere(Body):
@@ -27,9 +24,6 @@ class Sphere(Body):
 
     def __repr__(self):
         return 'Sphere(center={}, radius={})'.format(self.position(), self._r)
-
-    def csg(self):
-        return CSG.sphere(center=self.center().tolist(), radius=self.radius())
 
     def equivalent_mesh_size(self):
         return self.radius() * 2.0

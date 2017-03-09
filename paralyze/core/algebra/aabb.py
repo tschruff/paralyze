@@ -1,6 +1,5 @@
 from ..parsable import Parsable
 from .vector import Vector
-from csg.core import CSG
 
 import numpy as np
 import itertools
@@ -36,9 +35,6 @@ class AABB(Parsable):
     @property
     def center(self):
         return (self.min + self.max) / 2.0
-
-    def csg(self):
-        return CSG.cube(center=self.center.tolist(), radius=(self.size/2).tolist())
 
     @property
     def min(self):

@@ -146,13 +146,6 @@ class Body(object):
         return self._center
 
     @abc.abstractmethod
-    def csg(self):
-        """
-
-        :return:
-        """
-
-    @abc.abstractmethod
     def equivalent_mesh_size(self):
         """ Returns the bodies size equal to the mesh size at which the bodies
         would not fit through the mesh anymore.
