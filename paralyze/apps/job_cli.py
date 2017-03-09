@@ -80,7 +80,11 @@ def get_template_variables(env, template_file):
         set of template variables as strings
     """
     template = env.loader.get_source(env, template_file)[0]
-    template_ast = env.parse(template)
+
+    try:
+        template_ast = env.parse(template)
+    except jinja2.TemplateSyntaxError as e:
+        logger.error('error while parsing template file "{}": {}'.format(template_file, e.message))
 
     template_vars = meta.find_undeclared_variables(template_ast)
 
