@@ -4,6 +4,9 @@ from .fields import Cell, CellInterval
 
 import re
 import ast
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def get_input(prompt, default=None, options=()):
@@ -14,19 +17,23 @@ def get_input(prompt, default=None, options=()):
 
 
 def type_cast(arg):
-    if re.match(AABB.Pattern, arg):
-        return AABB.parse(arg)
-    if re.match(Interval.Pattern, arg):
-        return Interval.parse(arg)
-    if re.match(Vector.Pattern, arg):
-        return Vector.parse(arg)
-    if re.match(Cell.Pattern, arg):
-        return Cell.parse(arg)
-    if re.match(CellInterval.Pattern, arg):
-        return CellInterval.parse(arg)
-    if re.match(Parsable.Integer, arg):
-        return int(arg)
-    if re.match(Parsable.Decimal, arg):
-        return float(arg)
+    try:
+        if re.fullmatch(AABB.Pattern, arg):
+            return AABB.parse(arg)
+        if re.fullmatch(Interval.Pattern, arg):
+            return Interval.parse(arg)
+        if re.fullmatch(Vector.Pattern, arg):
+            return Vector.parse(arg)
+        if re.fullmatch(Cell.Pattern, arg):
+            return Cell.parse(arg)
+        if re.fullmatch(CellInterval.Pattern, arg):
+            return CellInterval.parse(arg)
+        if re.fullmatch(Parsable.Integer, arg):
+            return int(arg)
+        if re.fullmatch(Parsable.Decimal, arg):
+            return float(arg)
+    except ValueError as e:
+        logger.error('error during type conversion: {}'.format(e.args[0]))
+        raise e
     # consider everything else a string
     return str(arg)

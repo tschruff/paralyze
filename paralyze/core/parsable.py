@@ -12,9 +12,8 @@ class Parsable(object):
     def parse(cls, str):
         if not len(cls.Pattern):
             raise NotImplementedError('Every subclass of Parsable must implement the Pattern member!')
-        pattern = re.compile(cls.Pattern)
-        str = ''.join(str.split())
-        if not pattern.match(str):
+        if not re.fullmatch(cls.Pattern, str):
             raise ValueError('{} is not a valid representation of {}'.format(str, cls))
+        pattern = re.compile(cls.Pattern)
         kwargs = [m.groupdict() for m in pattern.finditer(str)][0]
         return cls(**kwargs)

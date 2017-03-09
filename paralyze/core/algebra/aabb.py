@@ -11,7 +11,7 @@ class AABB(Parsable):
     """
 
     # re pattern that matches a valid AABB object (whitespaces removed)
-    Pattern = r"\A\[(?P<min_corner><{0},{0},{0}>),(?P<max_corner><{0},{0},{0}>)\]\Z".format(Parsable.Decimal)
+    Pattern = r"\[(?P<min_corner><{0},{0},{0}>),(?P<max_corner><{0},{0},{0}>)\]".format(Parsable.Decimal)
 
     def __init__(self, min_corner=(0, 0, 0), max_corner=None):
         self._min = Vector(min_corner)

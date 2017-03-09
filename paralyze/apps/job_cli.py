@@ -119,9 +119,15 @@ def save_job_file(env, template_key, context, force=False):
         else:
             raise IOError('could not create file "{}" because a file with same name already exists!'.format(out_file))
 
+    try:
+        file_content = template.render(**context)
+    except TypeError as e:
+        logger.error('error during rendering of template file "{}": {}'.format(out_file, e.args[0]))
+        sys.exit(1)
+
     # render and write file
     with open(out_file, 'w') as job:
-        job.write(template.render(**context))
+        job.write(file_content)
     # log progress
     logger.info('created file "{}"'.format(out_file))
 
@@ -237,8 +243,9 @@ def main():
     template_vars = template_vars - set(context.keys())
 
     parser = argparse.ArgumentParser()
+    # parse all variables as strings first
     for var in template_vars:
-        parser.add_argument('--%s' % var, required=True)
+        parser.add_argument('--%s' % var, required=True, type=type_cast)
     # parse template args from command line
     job_args = parser.parse_args(job_args)
     # and add them to the context

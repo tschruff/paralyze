@@ -5,7 +5,7 @@ import sys
 import importlib
 import argparse
 
-from paralyze.core import rdict
+from paralyze.core import rdict, type_cast
 from paralyze.core.io.json_ext import ParalyzeJSONDecoder, ParalyzeJSONEncoder
 
 logger = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ class Workspace(object):
         parser = argparse.ArgumentParser()
         # add workspace variables as required command line arguments
         for var in self.variables():
-            parser.add_argument('--%s' % var, required=True)
+            parser.add_argument('--%s' % var, required=True, type=type_cast)
         wsp_args, custom_args = parser.parse_known_args(args or sys.argv)
         # update workspace settings directly with command line values
         self.update(vars(wsp_args))
