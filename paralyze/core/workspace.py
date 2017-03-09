@@ -106,7 +106,7 @@ class Workspace(object):
             self.update(args)
             return []
         # init variables from argument list
-        parser = argparse.ArgumentParser(allow_abbrev=False)
+        parser = argparse.ArgumentParser()
         # add workspace variables as required command line arguments
         for var in self.variables():
             parser.add_argument('--%s' % var, required=True)
