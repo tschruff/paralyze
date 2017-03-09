@@ -11,7 +11,6 @@ class rdict(MutableMapping):
         self._dict = dict
         self._format = Formatter()
         self._sub = set([])
-        self._p = None
 
     def __delitem__(self, key):
         del self._dict[key]
@@ -70,6 +69,12 @@ class rdict(MutableMapping):
                 if field_name is not None:
                     var.append(field_name)
         return set(var)
+
+    #def pop(self, key, default=None):
+    #    return self._dict.pop(key, default)
+
+    #def update(self, other):
+    #    self._dict.update(other)
 
     def vars(self):
         variables = []

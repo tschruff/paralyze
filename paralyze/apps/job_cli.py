@@ -71,13 +71,13 @@ def get_template_variables(env, template_file):
     ----------
     env: jinja2.Environment
         template environment
-    template_key: str
-        name of template
+    template_file: str
+        name of template file
 
     Returns
     -------
-    template_vars: list
-        list of template variables (strings)
+    template_vars: set
+        set of template variables as strings
     """
     template = env.loader.get_source(env, template_file)[0]
     template_ast = env.parse(template)
@@ -113,10 +113,11 @@ def save_job_file(env, template_key, context, force=False):
     template = env.get_template(context['templates'][template_key])
 
     out_file = context['files'][template_key]
-    if os.path.exists(out_file) and force:
-        logger.info('overriding existing file "{}"!'.format(out_file))
-    elif not force:
-        raise IOError('could not create file "{}" because a file with same name already exists!'.format(out_file))
+    if os.path.exists(out_file):
+        if force:
+            logger.info('overriding existing file "{}"!'.format(out_file))
+        else:
+            raise IOError('could not create file "{}" because a file with same name already exists!'.format(out_file))
 
     # render and write file
     with open(out_file, 'w') as job:
@@ -131,6 +132,9 @@ def generate_file_paths(wsp):
         template_file = wsp['templates'][key]
         suffix = template_file[template_file.rfind('.'):]
         wsp['files'][key] = os.path.join(wsp['run_dir'], wsp['job_name'] + suffix)
+    if not os.path.exists(wsp['run_dir']):
+        logger.info('creating run_dir "{}"'.format(wsp['run_dir']))
+        os.makedirs(wsp['run_dir'])
 
 
 def create_env(wsp):
@@ -184,6 +188,7 @@ def main():
             else:
                 logger.error('job "{}" does not exist!'.format(args.job))
                 sys.exit(1)
+        # initialize workspace variables with command line arguments
         job_args = wsp.init_variables(custom_args)
     except IOError as e:
         logger.error('directory "{}" is not a paralyze workspace!\n '
@@ -233,7 +238,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     for var in template_vars:
-        parser.add_argument('--%s' % var, required=True, type=type_cast)
+        parser.add_argument('--%s' % var, required=True)
     # parse template args from command line
     job_args = parser.parse_args(job_args)
     # and add them to the context
