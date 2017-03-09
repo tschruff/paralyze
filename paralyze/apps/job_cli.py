@@ -138,11 +138,16 @@ def generate_file_paths(wsp):
 
         template_file = wsp['templates'][key]
         suffix = template_file[template_file.rfind('.'):]
-        wsp['files'][key] = os.path.join(wsp['run_dir'], key, wsp['job_name'] + suffix)
-        
-        if not os.path.exists(wsp['run_dir']):
-            logger.info('creating run_dir "{}"'.format(wsp['run_dir']))
-            os.makedirs(os.path.join(wsp['run_dir'], key))
+        folder = os.path.join(wsp['run_dir'], key)
+        wsp['files'][key] = os.path.join(folder, wsp['job_name'] + suffix)
+
+        if not os.path.exists(folder):
+            logger.info('creating sub-folder in run_dir "{}"'.format(key))
+            try:
+                os.makedirs(folder)
+            except OSError as e:
+                logger.error(e.args[0])
+                sys.exit(1)
 
 
 def create_env(wsp):
