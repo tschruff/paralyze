@@ -1,6 +1,6 @@
-from .cell import CellInterval
-from paralyze.core.io import vtk as vtk_utils
-from paralyze.core.io import xml as xml_utils
+from .cell_interval import CellInterval
+from ..io import vtk as vtk_utils
+from ..io import xml as xml_utils
 
 from xml.etree import ElementTree
 
@@ -13,10 +13,10 @@ import base64
 def save_as_vtk_image_file(field, filename, binary=False, extent=None, origin=(0, 0, 0), spacing=(1, 1, 1)):
 
     if extent is None:
-        extent = field.cellInterval()
+        extent = field.cell_interval
     else:
         assert isinstance(extent, CellInterval)
-        assert extent.size == field.cellInterval().size
+        assert extent.size == field.cell_interval.size
 
     extent_str = '%d %d %d %d %d %d' % (extent.xMin, extent.xMax+1, extent.yMin, extent.yMax+1, extent.zMin, extent.zMax+1)
     origin_str = '%f %f %f' % (origin[0], origin[1], origin[2])
@@ -51,10 +51,10 @@ def save_as_vtk_image_file(field, filename, binary=False, extent=None, origin=(0
     data_array = ElementTree.SubElement(cell_data, 'DataArray', attrib=attrib)
 
     i = 0
-    vtk_array = np.zeros((field.size().prod(), ), dtype=field.dtype)
-    for z in range(field.size()[2]):
-        for y in range(field.size()[1]):
-            for x in range(field.size()[0]):
+    vtk_array = np.zeros((field.num_cells, ), dtype=field.dtype)
+    for z in range(field.size[2]):
+        for y in range(field.size[1]):
+            for x in range(field.size[0]):
                 vtk_array[i] = field.data[x, y, z]
                 i += 1
 
@@ -71,11 +71,11 @@ def save_as_vtk_image_file(field, filename, binary=False, extent=None, origin=(0
 
 
 def save_as_numpy_array(field, filename, **kwargs):
-    pass
+    np.save(filename, field.data, **kwargs)
 
 
 def save_as_vxl_file(field, filename):
-    size = field.size()
+    size = field.size
     with open(filename, 'wb') as vxl:
         vxl.write('{s[0]:d} {s[1]:d} {s[2]:d}\n'.format(s=size).encode())
         for z in range(size[2]):

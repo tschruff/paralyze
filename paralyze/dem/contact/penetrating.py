@@ -30,6 +30,6 @@ class Penetrating(object):
         pass
 
     def _compute_penetration(self):
-        if not self._b0.aabb().intersects(self._b1.aabb()):
+        if not self._b0.domain().intersects(self._b1.domain()):
             return -float('inf')
         return penetration_depth(self._b0, self._b1)

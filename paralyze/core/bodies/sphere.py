@@ -1,30 +1,35 @@
-from paralyze.core.algebra import AABB, Vector
+from ..algebra import AABB, Vector
 from .body import Body
+from .bodystorage import BodyStorage
 
-import math
+from csg.core import CSG
 
 
 class Sphere(Body):
 
-    def __init__(self, pos, radius=1, **kwargs):
+    def __init__(self, center=(0, 0, 0), radius=1, **kwargs):
         """
 
-        :param pos:
-        :param radius:
-        :param kwargs:
-        :return:
+        Parameters
+        ----------
+        center: Vector
+
+        radius: float
+
+        kwargs: dict
+
         """
+        Body.__init__(self, center, **kwargs)
         assert radius > 0
 
         self._r = radius
-
-        Body.__init__(self, pos, **kwargs)
+        self._update_geometry()
 
     def __repr__(self):
-        return 'Sphere(id=%s, pos=%s, radius=%f)' % (str(self.id()), self.position(), self._r)
+        return 'Sphere(center={}, radius={})'.format(self.position(), self._r)
 
-    def aabb(self):
-        return AABB(self.position() - Vector(self._r), self.position() + Vector(self._r))
+    def csg(self):
+        return CSG.sphere(center=self.center().tolist(), radius=self.radius())
 
     def equivalent_mesh_size(self):
         return self.radius() * 2.0
@@ -35,11 +40,5 @@ class Sphere(Body):
     def radius(self):
         return self._r
 
-    def scale(self, scale_factor):
-        Body.scale(self, scale_factor)
-        self.set_radius(self.radius() * scale_factor)
-
-    def set_radius(self, radius):
-        assert radius > 0.0
-        self._r = radius
-        self._v = 4/3.0 * math.pi * self._r ** 3
+    def _update_geometry(self):
+        self._aabb = AABB(self.position() - Vector(self._r), self.position() + Vector(self._r))

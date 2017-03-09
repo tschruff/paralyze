@@ -1,51 +1,90 @@
+from collections.abc import MutableMapping
 from string import Formatter
 import re
 
 
-class rdict(object):
+class rdict(MutableMapping):
 
-    def __init__(self, dictionary):
+    VarPattern = r"(?<!\{)\{([^\{\}]+)\}(?!\})"
+
+    def __init__(self, dict):
+        self._dict = dict
         self._format = Formatter()
-        self._dict = dictionary
         self._sub = set([])
+        self._p = None
+
+    def __delitem__(self, key):
+        del self._dict[key]
 
     def __getitem__(self, key):
-        if key in self._sub:
-            raise ValueError("Cyclic reference. Key: %s." % key)
-        self._sub.add(key)
-        value = self._dict[key]
-        if type(value) == str:
-            value = self._format.vformat(value, [], self)
-        self._sub.remove(key)
-        return value
+        return self.get(key)
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
 
     def __setitem__(self, key, value):
         self._dict[key] = value
 
-    def __str__(self):
-        return str(self._dict)
+    def keys(self):
+        return self._dict.keys()
 
     def get(self, key, default=None):
-        if key in self.keys():
-            return self[key]
+
+        if key in self._sub:
+            raise ValueError('Cyclic reference for key "{}".'.format(key))
+
+        self._sub.add(key)
+        if key in self._dict:
+            value = self._dict[key]
+            # formatting is only applied to the first dict level
+            while self.contains_var(value):
+                value = self._format.vformat(value, [], self._dict)
+
         else:
-            return default
+            value = default
+
+        self._sub.remove(key)
+        return value
 
     def get_raw(self, key, default=None):
         return self._dict.get(key, default)
 
-    def keys(self):
-        return self._dict.keys()
+    def fields(self):
+        """ Parses all dict values for variables, e.g. something like this "{some_var}", "{dict[key]}", "{obj.attr}"
+        and returns them as a set.
 
-    def update(self, other):
-        self._dict.update(other)
-
-    def variables(self):
+        Returns
+        -------
+        fields: set
+            The set of replacement fields
+        """
         var = []
-        for item in self._dict.values():
-            if type(item) != str:
+        for val in self._dict.values():
+            if not isinstance(val, str):
                 continue
-            var.extend(re.findall(r"\{([a-zA-Z_]+)\}", item))
-        var = set(var)
-        keys = set(self._dict)
-        return var.difference(keys)
+            result = self._format.parse(val)
+            for literal_text, field_name, format_spec, conversion in result:
+                if field_name is not None:
+                    var.append(field_name)
+        return set(var)
+
+    def vars(self):
+        variables = []
+        for field in self.fields():
+            try:
+                self._format.get_field(field, [], self._dict)
+            except KeyError:
+                variables.append(field)
+        return set(variables)
+
+    def var_items(self):
+        return {var: self[var] for var in self.vars() if var in self}
+
+    @staticmethod
+    def contains_var(value):
+        if type(value) is not str:
+            return False
+        return len(re.findall(rdict.VarPattern, value)) > 0

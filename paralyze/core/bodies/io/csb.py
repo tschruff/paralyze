@@ -1,4 +1,4 @@
-from paralyze.core.bodies import Bodies, Plane, Sphere
+from paralyze.core.bodies import BodyStorage, Plane, Sphere
 from paralyze.core.algebra import Vector
 
 import glob
@@ -26,7 +26,7 @@ class CSBFile(object):
     def load(filename, delimiter=',', **kwargs):
         log = logging.getLogger(__name__)
 
-        bodies = Bodies()
+        bodies = BodyStorage()
 
         names = glob.glob(filename)
         if not len(names):

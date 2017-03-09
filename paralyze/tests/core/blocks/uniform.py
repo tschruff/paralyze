@@ -14,13 +14,13 @@ class UniformBlockStorageTests(unittest.TestCase):
         domain = AABB((0, 0, 0), (100, 100, 100))
 
         self.assertEqual(blocks.num_cells().prod(), 1000000)
-        self.assertEqual(blocks.np(), 4)
-        self.assertEqual(blocks.globalDomain(), domain)
+        self.assertEqual(blocks.num_processes(), 4)
+        self.assertEqual(blocks.global_domain(), domain)
         self.assertEqual(blocks.numBlocks().prod(), 4)
         self.assertFalse(blocks.is_x_periodic())
         self.assertFalse(blocks.is_y_periodic())
         self.assertFalse(blocks.is_z_periodic())
-        self.assertEqual(blocks.mapDomainToCellInterval(domain).num_cells(), 1000000)
+        self.assertEqual(blocks.map_domain_to_cell_interval(domain).num_cells(), 1000000)
         self.assertEqual(blocks.globalCellInterval().min, (0, 0, 0))
         self.assertEqual(blocks.globalCellInterval().max, (99, 99, 99))
         self.assertEqual(blocks.cellCenter(Cell(49)), (49.5, 49.5, 49.5))
@@ -33,20 +33,20 @@ class UniformBlockStorageTests(unittest.TestCase):
 
         for block in blocks:
 
-            gCell = blocks.mapBlockLocalToGlobal(lCell, block.id())
-            gPos = blocks.mapBlockLocalToGlobal(lPos, block.id())
-            gCellBB = blocks.mapBlockLocalToGlobal(lCellBB, block.id())
-            gAABB = blocks.mapBlockLocalToGlobal(lAABB, block.id())
+            gCell = blocks.map_block_local_to_global(lCell, block.id())
+            gPos = blocks.map_block_local_to_global(lPos, block.id())
+            gCellBB = blocks.map_block_local_to_global(lCellBB, block.id())
+            gAABB = blocks.map_block_local_to_global(lAABB, block.id())
 
             self.assertEqual(gCell, blocks.globalCellInterval(block.id()).min + lCell)
-            self.assertEqual(gPos, blocks.globalDomain(block.id()).min + lPos)
+            self.assertEqual(gPos, blocks.global_domain(block.id()).min + lPos)
             self.assertEqual(gCellBB, lCellBB.shifted(blocks.globalCellInterval(block.id()).min))
-            self.assertEqual(gAABB, lAABB.shifted(blocks.globalDomain(block.id()).min))
+            self.assertEqual(gAABB, lAABB.shifted(blocks.global_domain(block.id()).min))
 
-            self.assertEqual(blocks.mapGlobalToBlockLocal(gCell, block.id()), lCell)
-            self.assertEqual(blocks.mapGlobalToBlockLocal(gPos, block.id()), lPos)
-            self.assertEqual(blocks.mapGlobalToBlockLocal(gCellBB, block.id()), lCellBB)
-            self.assertEqual(blocks.mapGlobalToBlockLocal(gAABB, block.id()), lAABB)
+            self.assertEqual(blocks.map_global_to_block_local(gCell, block.id()), lCell)
+            self.assertEqual(blocks.map_global_to_block_local(gPos, block.id()), lPos)
+            self.assertEqual(blocks.map_global_to_block_local(gCellBB, block.id()), lCellBB)
+            self.assertEqual(blocks.map_global_to_block_local(gAABB, block.id()), lAABB)
 
     def test_body_bounding_box(self):
 
@@ -54,9 +54,9 @@ class UniformBlockStorageTests(unittest.TestCase):
         sphere = Sphere((5, 5, 5), 5)
         blocks.addBodies('bodies', {sphere, })
 
-        self.assertEqual(sphere.aabb(), AABB((0, 0, 0), (10, 10, 10)))
+        self.assertEqual(sphere.domain(), AABB((0, 0, 0), (10, 10, 10)))
 
-        cellBB = blocks.mapDomainToCellInterval(sphere.aabb())
+        cellBB = blocks.map_domain_to_cell_interval(sphere.domain())
         cells = CellInterval((0, 0, 0), (9, 9, 9))
         self.assertEqual(cellBB, cells, '%s != %s' % (cellBB, cells))
 

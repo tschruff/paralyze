@@ -1,5 +1,7 @@
 from paralyze.core import AABB, CSBFile, Vector
-from paralyze.core import Capsule, Plane, Sphere
+from paralyze.core import BodyStorage, Capsule, Cylinder, Plane, Sphere
+
+from progressbar import ProgressBar
 
 import logging
 import time
@@ -21,23 +23,99 @@ def str_to_body_types(type_str):
 
 
 class Command(object):
+
     def __init__(self):
         self.log = logging.getLogger(__name__)
+
+        self.args = [
+            ('--domain-filter', '-d', {
+                'type': str,
+                'default': None,
+                'help': 'axis aligned bounding box used for filtering. Format: "[<x0,y0,z0>,<x1,y1,z1>]"',
+                'dest': 'domain_filter'
+            }),
+            ('--strict', '-s', {
+                'action'  : 'store_true',
+                'default' : False,
+                'help'    : 'if enabled, bodies have to be fully contained by the given domain',
+                'dest'    : 'strict'
+            })
+        ]
+
+        self.domain = None
+
     def load_bodies(self, args):
         bodies = CSBFile.load(args.path, args.delimiter)
         num_bodies = len(bodies)
         if not num_bodies:
             self.log.error('No bodies to edit! Aborting ...'.format(args.path))
-            return
+            return []
         self.log.info('Loaded {:d} bodies from file {}'.format(num_bodies, args.path))
+
+        # extract command line parameters
+        if args.domain_filter == None:
+            self.domain = bodies.domain()
+        else:
+            self.domain = AABB.parse(args.domain_filter)
+            if self.domain.is_empty():
+                self.log.error('Specified domain is empty! Aborting ...')
+                return BodyStorage()
+            # apply domain filter
+            old_num_bodies = len(bodies)
+            bodies = bodies.clipped(self.domain, args.strict)
+            num_bodies = len(bodies)
+            text = 'Strictly filtered' if args.strict else 'Filtered'
+            self.log.info('{} {:d} bodies outside domain, {:d} bodies remain'.format(text, old_num_bodies-num_bodies, num_bodies))
+
         return bodies
+
+
+class Mesh(Command):
+
+    help = 'convert to vtk mesh file'
+
+    def __init__(self):
+        Command.__init__(self)
+
+        self.args.extend((
+            ('vtk_file', {
+                'type': str,
+                'help': 'absolute path to vtk mesh file'
+            }),
+            ('--invert-solids', '-i', {
+                'action': 'store_true',
+                'default': False,
+                'help': 'flips solid and void space of the volume mesh',
+                'dest': 'invert_solids'
+            })
+        ))
+
+    def __call__(self, args):
+
+        bodies = self.load_bodies(args)
+
+        mesh = self.domain.csg()
+        with ProgressBar(max_value=len(bodies)-1) as p:
+            for i, body in enumerate(bodies):
+                mesh = mesh.subtract(body.csg())
+                p.update(i)
+
+        if not args.invert_solids:
+            mesh = mesh.inverse()
+
+        mesh.saveVTK(args.vtk_file)
+        return True
 
 
 class Slice(Command):
 
     help = 'create slices along specified axis'
 
-    args = (('axis', {
+    def __init__(self):
+        Command.__init__(self)
+
+        self.args.extend((
+            ('axis', {
                 'type'    : str
             }),
             ('num_slices', {
@@ -48,20 +126,8 @@ class Slice(Command):
                 'type'    : str,
                 'default' : '',
                 'help'    : 'path to output folder'
-            }),
-            ('--domain-filter', '-d', {
-                'type'    : str,
-                'default' : None,
-                'help'    : 'axis aligned bounding box used for filtering. Format: "[<x0,y0,z0>,<x1,y1,z1>]"',
-                'dest'    : 'domain_filter'
-            }),
-            ('--strict', '-s', {
-                'action'  : 'store_true',
-                'default' : False,
-                'help'    : 'if enabled, bodies have to be fully contained by the given domain',
-                'dest'    : 'strict'
             })
-    )
+        ))
 
     def __call__(self, args):
 
@@ -76,23 +142,6 @@ class Slice(Command):
             return False
         axis = axes.index(args.axis)
 
-        # extract command line parameters
-        if args.domain_filter == None:
-            domain = bodies.aabb()
-        else:
-            domain = AABB.parse(args.domain)
-
-        if domain.is_empty():
-            self.log.error('Specified domain is empty! Aborting ...')
-            return False
-
-        # apply domain filter
-        old_num_bodies = len(bodies)
-        bodies = bodies.clipped(domain, args.strict)
-        num_bodies = len(bodies)
-        text = 'Strictly filtered' if args.strict else 'Filtered'
-        self.log.info('{} {:d} bodies outside domain. %d bodies remain'.format(text, old_num_bodies-num_bodies, num_bodies))
-
         # create folder for slice files
         if not os.path.exists(args.out_folder):
             os.makedirs(args.out_folder)
@@ -100,7 +149,7 @@ class Slice(Command):
 
         # create slices and save them
         slice_file = os.path.join(args.out_folder, 'slice_{axis}_{slice_min:f}-{slice_max:f}.csv')
-        for slice in domain.iter_slices(axis, args.num_slices):
+        for slice in self.domain.iter_slices(axis, args.num_slices):
             slice_bodies = bodies.clipped(slice, args.strict)
             bodies -= slice_bodies
             filename = slice_file.format(axis=axes[axis], slice_min=slice.min[axis], slice_max=slice.max[axis])
@@ -114,7 +163,11 @@ class Edit(Command):
 
     help = 'edit bodies in an existing csb file'
 
-    args = (('out', {
+    def __init__(self):
+        Command.__init__(self)
+
+        self.args.extend((
+            ('out', {
                 'type'    : str,
                 'help'    : 'path to file where bodies are saved to. Will be overridden if it already exists!'
             }),
@@ -135,32 +188,12 @@ class Edit(Command):
                 'default' : '<0,0,0>',
                 'help'    : '',
                 'dest'    : 'offset'
-            }),
-            ('--domain-filter', '-d', {
-                'type'    : str,
-                'default' : None,
-                'help'    : 'axis aligned bounding box used for filtering. Format: "[<x0,y0,z0>,<x1,y1,z1>]"',
-                'dest'    : 'domain_filter'
-            }),
-            ('--strict', '-s', {
-                'action'  : 'store_true',
-                'default' : False,
-                'help'    : 'if enabled, bodies have to be fully contained by the given domain',
-                'dest'    : 'strict'
-            }))
+            })
+        ))
 
     def __call__(self, args):
 
         bodies = self.load_bodies(args)
-
-        # extract command line parameters
-        if args.domain_filter is not None:
-            domain_filter = AABB.parse(args.domain_filter)
-            if domain_filter.is_empty():
-                self.log.error('Specified domain is empty! Aborting ...')
-                return
-        else:
-            domain_filter = None
 
         offset = Vector.parse(args.offset)
 
@@ -176,23 +209,16 @@ class Edit(Command):
 
         # apply scale factor
         if args.scale_factor != 1.0:
+            self.log.info('Applying scaling factor {} to bodies'.format(args.scale_factor))
             bodies.scale(args.scale_factor)
-            self.log.info('Scaled bodies by factor {:f}'.format(args.scale_factor))
 
         # apply offset
         if offset != Vector(0):
+            self.log.info('Applying offset {} to bodies'.format(offset))
             bodies.translate(offset)
-            self.log.info('Moved bodies by {}'.format(offset))
 
         if self.log.getEffectiveLevel() <= logging.DEBUG:
             self.log.debug('Body space is {}'.format(bodies.aabb()))
-
-        # apply domain filter
-        if domain_filter is not None:
-            num_bodies = len(bodies)
-            bodies = bodies.clipped(domain_filter, args.strict)
-            text = 'Strictly filtered' if args.strict else 'Filtered'
-            self.log.info('{} {:d} bodies outside domain'.format(text, num_bodies-len(bodies)))
 
         # save
         CSBFile.save(args.out, bodies)
@@ -203,7 +229,12 @@ class Exec(Command):
 
     help = ''
 
-    args = (('expression', {}),)
+    def __init__(self):
+        Command.__init__(self)
+
+        self.args.extend((
+            ('expression', {}),
+        ))
 
     def __call__(self, args):
         bodies = self.load_bodies(args)
@@ -216,9 +247,10 @@ def main():
     import sys
 
     commands = {
-        'edit' : Edit,
-        'exec' : Exec,
-        'slice': Slice
+        'edit' : Edit(),
+        'exec' : Exec(),
+        'slice': Slice(),
+        'mesh' : Mesh()
     }
 
     parser = argparse.ArgumentParser()
@@ -252,7 +284,7 @@ def main():
     # execute command
     t0 = time.time()
     log.info('Running "{}" command'.format(args.cmd_name))
-    commands[args.cmd_name]()(args)
+    commands[args.cmd_name](args)
     log.info('Finished command "{}". Took {:f} seconds'.format(args.cmd_name, time.time()-t0))
 
 

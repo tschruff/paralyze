@@ -1,14 +1,18 @@
-from .cell import Cell, CellInterval
+from .cell import Cell
+from .cell_interval import CellInterval
 
 import numpy as np
 
 
 class Field(object):
+    """ The Field class wraps a numpy array and adds some features such as
+    cell interval and ghost layers
+
+    """
 
     def __init__(self, size, dtype, ghost_level=0, init=0):
         self._gl = ghost_level
-        self._ci = CellInterval(Cell(0), size - Cell(1))
-        self._ci = self._ci.extended(self._gl)
+        self._ci = CellInterval(Cell(0), size - Cell(1)).extended(self._gl)
         self._data = np.full(self._ci.size, init, dtype)
 
     def __setitem__(self, index, value):
@@ -17,7 +21,9 @@ class Field(object):
             self._data[index[0], index[1], index[2]] = value
         if isinstance(index, CellInterval):
             index = index.shifted(self._gl)
-            self._data[index.min.x:index.max.x + 1, index.min.y:index.max.y + 1, index.min.z:index.max.z + 1] = value
+            self._data[index.min[0]:index.max[0]+1, index.min[1]:index.max[1]+1, index.min[2]:index.max[2]+1] = value
+        else:
+            self._data[index] = value
 
     def __getitem__(self, index):
         if isinstance(index, Cell):
@@ -25,7 +31,9 @@ class Field(object):
             return self._data[index[0], index[1], index[2]]
         if isinstance(index, CellInterval):
             index = index.shifted(self._gl)
-            return self._data[index.min.x:index.max.x + 1, index.min.y:index.max.y + 1, index.min.z:index.max.z + 1]
+            return self._data[index.min[0]:index.max[0]+1, index.min[1]:index.max[1]+1, index.min[2]:index.max[2]+1]
+        else:
+            return self._data[index]
 
     @property
     def cell_interval(self):
@@ -43,11 +51,9 @@ class Field(object):
     def ghost_level(self):
         return self._gl
 
-    def iterGhostLayerXYZ(self):
-        pass
-
-    def iterXYZ(self):
-        pass
+    @property
+    def num_cells(self):
+        return self.size.prod()
 
     @property
     def size(self):
@@ -56,3 +62,15 @@ class Field(object):
     @property
     def shape(self):
         return self._data.shape
+
+    @property
+    def ghost_cells(self):
+        return self._ci - self._ci.extended(-self._gl)
+
+    def iter_ghost_layer_cells(self):
+        return iter(self.ghost_cells)
+
+    def iter_cells(self, include_gl=False):
+        if not include_gl:
+            return iter(self._ci.extended(-self._gl))
+        return iter(self._ci)

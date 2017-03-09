@@ -2,16 +2,15 @@
 def map_bodies_to_field(block, blocks, bodies_id, field_id, solid_value):
 
     field = block[field_id]
-    cc = blocks.cellCenter  # for a little more performance
+    center = blocks.cell_center  # for a little more performance
 
     for body in block[bodies_id].iter_bodies():
-        cells = blocks.mapDomainToCellInterval(body.aabb())
-        cells = blocks.mapGlobalToBlockLocal(cells, block.id)
-        cells = block.cellInterval().intersect(cells)
+        cells = blocks.map_domain_to_cell_interval(body.domain())
+        cells = blocks.cell_interval(block.id).intersection(cells)
 
-        for local_cell in cells:
-            cell = blocks.mapBlockLocalToGlobal(local_cell, block.id)
-            if body.contains(cc(cell)):
+        for global_cell in cells:
+            local_cell = blocks.map_global_to_block_local(global_cell, block.id)
+            if body.contains(center(global_cell)):
                 field[local_cell] = solid_value
 
     return block

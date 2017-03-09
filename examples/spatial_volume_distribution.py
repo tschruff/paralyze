@@ -42,7 +42,7 @@ if OUTPUT == '':
 
 domain = AABB.parse(DOMAIN)
 bodies = CSBFile.load(INPUT)
-bodies = bodies.subset(lambda body: domain.intersects(body.aabb()))
+bodies = bodies.subset(lambda body: domain.intersects(body.domain()))
 
 if len(bodies) == 0:
     print('No bodies found in file %s' % INPUT)
@@ -50,7 +50,7 @@ if len(bodies) == 0:
 
 body_slices = [[] for _ in range(NUM_SLICES)]
 
-slices = domain.create_slices(AXIS, NUM_SLICES)
+slices = domain.slices(AXIS, NUM_SLICES)
 slice_centers = [slice.center[AXIS] for slice in slices]
 slice_volumes = [0.0 for _ in range(NUM_SLICES)]
 slice_bodies = [[] for _ in range(NUM_SLICES)]
@@ -59,7 +59,7 @@ vs = VoxelVolume((0, 0, 0), 10, 1.0)
 
 for body in bodies.iter_bodies():
     for i, slice in enumerate(slices):
-        if body.aabb().intersects(slice):
+        if body.domain().intersects(slice):
             vs.set_origin(body.origin())
             vs.set_resolution(body.radius() / 10.0)
             slice_volumes[i] += vs.intersection_volume(slice)

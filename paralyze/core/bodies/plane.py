@@ -1,4 +1,4 @@
-from paralyze.core.algebra import AABB, Vector
+from ..algebra import Vector
 from .body import Body
 
 
@@ -16,9 +16,6 @@ class Plane(Body):
 
     def contains(self, point):
         return False
-
-    def aabb(self):
-        return AABB()
 
     def normal(self):
         return self._normal

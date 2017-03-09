@@ -16,7 +16,7 @@ def calc_mean_solid_fraction(blocks, bodies_id, domain=None):
     if domain is None:
         domain = blocks.domain
 
-    with Pool(blocks.np) as pool:
+    with Pool(blocks.num_processes) as pool:
         results = pool.map(partial(__get_solid_volume, bodies_id=bodies_id, domain=domain), blocks)
 
     solid = sum(results)
@@ -35,7 +35,7 @@ def calc_mean_packing_height(blocks, bodies_id, domain=None, position_generator=
         'num_samples': num_samples
     }
 
-    with Pool(blocks.np) as pool:
+    with Pool(blocks.num_processes) as pool:
         results = pool.map(partial(__sample_packing_height, **args))
 
     sum_s = 0

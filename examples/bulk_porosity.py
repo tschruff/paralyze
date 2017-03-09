@@ -23,14 +23,14 @@ OUTPUT_FOLDER = {'vtk': os.path.join(WORK_FOLDER, 'vtk_out'),
 def main():
 
     blocks = UniformBlockStorage((512, 512, 256), 4, dx=0.25, periodicity=(False, False, False), origin=(0, 0, 0))
-    print('Created block storage over domain %s' % blocks.globalDomain())
+    print('Created block storage over domain %s' % blocks.global_domain())
 
     bodies = CSBFile.load(os.path.join(WORK_FOLDER, INPUT) + '.csv', delimiter=',')
     bodies = bodies.subset(lambda body: isinstance(body, Sphere))
     print('Loaded %d bodies from input file' % len(bodies))
     print()
 
-    blocks.addBodies('bodies', blocks.clipToDomain(bodies))
+    blocks.addBodies('bodies', blocks.clip_to_domain(bodies))
 
     total = 0
     for block in blocks:

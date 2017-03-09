@@ -1,5 +1,5 @@
 from paralyze.core.io import vtk as vtk_utils
-from paralyze.core.field import io as field_io
+from paralyze.core.fields import io as field_io
 from paralyze.core.io import xml as xml_utils
 
 from xml.etree import ElementTree
@@ -22,7 +22,7 @@ def save_field_as_vtk_image_file(block, blocks, field_id, abs_folder_path, binar
 
     abs_file_path = os.path.join(abs_folder_path, field_id)
 
-    if blocks.np() > 1:
+    if blocks.num_processes() > 1:
 
         abs_tile_path = abs_file_path + '_{:d}.vti'
 
@@ -83,7 +83,7 @@ def save_field_as_vxl_file(block, blocks, field_id, abs_folder_path):
 
     abs_file_path = os.path.join(abs_folder_path, field_id)
 
-    if blocks.np() > 1:
+    if blocks.num_processes() > 1:
 
         abs_tile_path = abs_file_path + '_{:d}.vxl'
         rel_tile_path = os.path.basename(abs_tile_path)

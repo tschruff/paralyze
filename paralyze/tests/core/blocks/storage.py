@@ -15,7 +15,7 @@ def func_no_return(block):
 
 
 def handle_blocks(block, np, blocks):
-    result = blocks.np() == np
+    result = blocks.num_processes() == np
     return block, result
 
 

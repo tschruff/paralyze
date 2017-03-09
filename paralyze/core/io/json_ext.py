@@ -3,7 +3,7 @@ from paralyze.core import AABB, Cell, CellInterval, Interval, Vector, type_cast
 from json import JSONDecoder, JSONEncoder
 
 
-class ParalyzeEncoder(JSONEncoder):
+class ParalyzeJSONEncoder(JSONEncoder):
 
     def default(self, obj):
         if isinstance(obj, AABB):
@@ -20,7 +20,7 @@ class ParalyzeEncoder(JSONEncoder):
         return JSONEncoder.default(self, obj)
 
 
-class ParalyzeDecoder(JSONDecoder):
+class ParalyzeJSONDecoder(JSONDecoder):
 
     def __init__(self):
         JSONDecoder.__init__(self, object_hook=self.decode_ext)
@@ -43,5 +43,5 @@ class ParalyzeDecoder(JSONDecoder):
             return CellInterval(**d)
         else:
             # Oops... better put this back together.
-            d['__type__'] = type
+            d['__type__'] = custom_type
             return d

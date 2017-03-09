@@ -1,16 +1,18 @@
-from paralyze.core.algebra import Vector, AABB, Quaternion
-from paralyze.core.algebra import ReferenceFrame as RF
+from ..algebra import Vector, AABB, Quaternion
+from ..algebra import ReferenceFrame as RF
+from .bodystorage import BodyStorage
 
 import copy
 import uuid
+import abc
 
 
 class Body(object):
 
-    def __init__(self, pos, parent=None, visible=False, **kwargs):
+    def __init__(self, center, parent=None, visible=True, **kwargs):
 
         self._id = uuid.uuid4()
-        self._pos = Vector(pos)
+        self._pos = Vector(center)
         self._center = Vector(0)
         self._aabb = AABB(0)
         self._q = Quaternion()
@@ -18,8 +20,9 @@ class Body(object):
         self._data = kwargs
 
         self._parent = parent
-        self._source = None
-        self._shadows = []
+
+        self._source = None  # the source body id
+        self._shadows = []  # a list of shadow copy ids
 
         self._visible = visible
 
@@ -27,9 +30,12 @@ class Body(object):
         self._v = 0.0
 
     def __copy__(self):
-        """ Creates a shadow copy of the underlying bodies instance.
+        """ Creates a shadow copy of *self*.
 
-        :return: A shadow copy of the underlying bodies instance.
+        Returns
+        -------
+        shadow: Body
+            A shadow copy of the underlying bodies instance.
         """
 
         # if called instance is a shadow copy itself call parent
@@ -42,11 +48,11 @@ class Body(object):
             # create a new bodies instance
             shadow = type(self)(self._pos, **self._data)
             # copy also all subclass specific content from __dict__
-            # except for id, parent, and shadow copies
+            # except for id, source, and shadow copies
             data = self.__dict__.copy()
-            data['_parent'] = self  # TODO: Is storing a pointer critical?
+            data['_source'] = self.id()
             del data['_id']
-            del data['_shadowIds']
+            del data['_shadows']
             # and update the new instance with this data
             shadow.__dict__.update(data)
             # store shadow id
@@ -55,28 +61,54 @@ class Body(object):
 
     def __del__(self):
         if self.is_shadow_copy():
-            self._source.remove_shadow_copy(self)
+            source = BodyStorage().get(self._source)
+            if source is not None:  # maybe the source has already been deleted
+                source.remove_shadow_copy(self)
 
     def __eq__(self, other):
+        """
+
+        Parameters
+        ----------
+        other: Body
+            Another body instance to compare *self* to
+
+        Returns
+        -------
+        equal: bool
+            A bool indicating whether *self* and *other* are equal
+        """
+        if self.is_shadow_copy() and other.is_shadow_copy():
+            return self._source == other.source_id()
+        elif self.is_shadow_copy():
+            return self._source == other.id()
+        elif other.is_shadow_copy():
+            return self.id() == other.source_id()
         return self.id() == other.id()
 
     def __getitem__(self, key):
-        return self._data[key]
+        return self.get(key)
 
     def __hash__(self):
         return hash(self._id)
 
     def __setitem__(self, key, value):
-        self._data[key] = value
+        self.set(key, value)
 
     def id(self):
         return self._id
 
-    def get(self, key, default=None):
-        return self._data.get(key, default)
+    def is_visible(self):
+        return self._visible
 
     def set_visible(self, visible):
         self._visible = visible
+
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+
+    def set(self, key, value):
+        self._data[key] = value
 
     def parent(self):
         return self._parent
@@ -94,8 +126,11 @@ class Body(object):
     def num_shadow_copies(self):
         return len(self._shadows)
 
-    def source(self):
+    def source_id(self):
         return self._source
+
+    def shadow_copy_ids(self):
+        return self._shadows
 
     def remove_shadow_copy(self, shadow):
         self._shadows.remove(shadow.id())
@@ -104,23 +139,32 @@ class Body(object):
     # Body geometry #
     #################
 
-    def bounding_box(self):
+    def aabb(self):
         return self._aabb
 
     def center(self):
         return self._center
 
-    def equivalent_mesh_size(self):
+    @abc.abstractmethod
+    def csg(self):
         """
-        Returns the bodies size equal to the mesh size at which the bodies
-        would not fit through the mesh anymore.
 
         :return:
         """
-        raise NotImplementedError('Every bodies subclass must implement the equivalent_mesh_size() member')
 
+    @abc.abstractmethod
+    def equivalent_mesh_size(self):
+        """ Returns the bodies size equal to the mesh size at which the bodies
+        would not fit through the mesh anymore.
+        """
+
+    @abc.abstractmethod
     def contains(self, point):
-        raise NotImplementedError('Every Body subclass must implement the contains() member')
+        """
+
+        :param point:
+        :return:
+        """
 
     def move(self, delta):
         self._pos += delta
@@ -165,6 +209,9 @@ class Body(object):
     def volume(self):
         return self._v
 
+    @abc.abstractmethod
     def _update_geometry(self):
-        raise NotImplementedError()
+        """
 
+        :return:
+        """

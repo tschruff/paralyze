@@ -1,6 +1,6 @@
 from .parsable import Parsable
 from .algebra import AABB, Interval, Vector
-from .field import Cell, CellInterval
+from .fields import Cell, CellInterval
 
 import re
 import ast
@@ -13,21 +13,20 @@ def get_input(prompt, default=None, options=()):
     return value
 
 
-def type_cast(str):
-    str = ''.join(str.split())
-    if re.match(AABB.Pattern, str):
-        return AABB.parse(str)
-    if re.match(Interval.Pattern, str):
-        return Interval.parse(str)
-    if re.match(Vector.Pattern, str):
-        return Vector.parse(str)
-    if re.match(Cell.Pattern, str):
-        return Cell.parse(str)
-    if re.match(CellInterval.Pattern, str):
-        return CellInterval.parse(str)
-    if re.match(Parsable.Decimal, str):
-        return float(str)
-    if re.match(Parsable.Integer, str):
-        return int(str)
+def type_cast(arg):
+    if re.match(AABB.Pattern, arg):
+        return AABB.parse(arg)
+    if re.match(Interval.Pattern, arg):
+        return Interval.parse(arg)
+    if re.match(Vector.Pattern, arg):
+        return Vector.parse(arg)
+    if re.match(Cell.Pattern, arg):
+        return Cell.parse(arg)
+    if re.match(CellInterval.Pattern, arg):
+        return CellInterval.parse(arg)
+    if re.match(Parsable.Integer, arg):
+        return int(arg)
+    if re.match(Parsable.Decimal, arg):
+        return float(arg)
     # consider everything else a string
-    return str
+    return str(arg)

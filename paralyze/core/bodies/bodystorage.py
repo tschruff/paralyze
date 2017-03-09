@@ -1,12 +1,21 @@
-from paralyze.core.algebra import AABB, ReferenceFrame
+from ..algebra import AABB, ReferenceFrame
 
 
-class Bodies(set):
+class BodyStorage(object):
 
-    def __new__(cls, seq=()):
-        return set.__new__(Bodies, seq)
+    def __init__(self, bodies=()):
+        self._bodies = set(bodies)
 
-    def aabb(self, locals_only=False):
+    def __iter__(self):
+        return iter(self._bodies)
+
+    def __len__(self):
+        return len(self._bodies)
+
+    def add(self, body):
+        self._bodies.add(body)
+
+    def domain(self, locals_only=False):
         # TODO: cache aabb and only recompute if necessary, i.e. bodies have been added/removed/edited etc.
         if not len(self):
             return AABB()
@@ -27,6 +36,12 @@ class Bodies(set):
             for body in self.iter_bodies():
                 box = box.merged(body.aabb())
         return box
+
+    def get(self, body_id):
+        for body in self:
+            if body.id() == body_id:
+                return body
+        return None
 
     def iter_bodies(self):
         return iter(self)
@@ -56,39 +71,40 @@ class Bodies(set):
         print('%d shadows' % self.num_shadows())
         print('%d in total' % self.num_bodies())
 
-    def scale(self, scale_factor):
-        for body in self:
-            body.scale(scale_factor)
+    def remove(self, body):
+        self._bodies.remove(body)
 
     def translate(self, delta):
         for body in self:
             body.set_position(delta, ReferenceFrame.LOCAL)
 
     def subset(self, selector):
-        sub = Bodies()
-        for body in self:
-            if selector(body):
-                sub.add(body)
-        return sub
+        return BodyStorage([body for body in self if selector(body)])
 
     def clipped(self, domain, strict=False):
         """ Returns a subset of bodies that are inside the specified domain.
 
         :param domain:
         :type domain: AABB
-        :param strict: whether bodies center (False) or the whole bodies (True) is tested to be inside in the given domain
+        :param strict: whether only body center (False) or the whole body extent (True) is tested to be inside in the given domain
         :type strict: bool
-        :returns: subset to bodies that is inside the given domain
+        :returns: subset of bodies that is inside the given domain
         """
-        if domain.contains(self.aabb()):
+        if domain.contains(self.domain()):
             return self
         if strict:
             return self.subset(lambda body: domain.contains(body.aabb()))
         return self.subset(lambda body: domain.contains(body.position()))
 
+    def split(self, domains, strict=False):
+        bodies = []
+        for domain in domains:
+            bodies.append(self.clipped(domain, strict=strict))
+        return bodies
+
     def sliced(self, axis, num_slices, domain=None, strict=False):
         if not domain:
-            domain = self.aabb()
+            domain = self.domain()
         sliced_bodies = []
         for domain_slice in domain.iter_slices(axis, num_slices):
             sliced_bodies.append(self.clipped(domain_slice, strict))
