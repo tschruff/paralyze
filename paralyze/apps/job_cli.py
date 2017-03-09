@@ -135,12 +135,14 @@ def save_job_file(env, template_key, context, force=False):
 def generate_file_paths(wsp):
     wsp['files'] = {}
     for key in wsp['templates'].keys():
+
         template_file = wsp['templates'][key]
         suffix = template_file[template_file.rfind('.'):]
-        wsp['files'][key] = os.path.join(wsp['run_dir'], wsp['job_name'] + suffix)
-    if not os.path.exists(wsp['run_dir']):
-        logger.info('creating run_dir "{}"'.format(wsp['run_dir']))
-        os.makedirs(wsp['run_dir'])
+        wsp['files'][key] = os.path.join(wsp['run_dir'], key, wsp['job_name'] + suffix)
+        
+        if not os.path.exists(wsp['run_dir']):
+            logger.info('creating run_dir "{}"'.format(wsp['run_dir']))
+            os.makedirs(os.path.join(wsp['run_dir'], key))
 
 
 def create_env(wsp):
