@@ -18,7 +18,7 @@ class Vector(np.ndarray, Parsable):
 
     Pattern = r"\A(?P<value><{0},{0},{0}>)\Z".format(Parsable.Decimal)
 
-    def __new__(cls, value):
+    def __new__(cls, value, dtype=np.float64):
         if isinstance(value, str):
             value = ''.join(value.split())
             if re.match(Vector.Pattern, value):
@@ -29,7 +29,7 @@ class Vector(np.ndarray, Parsable):
             value = (value, value, value)
         elif len(value) != 3:
             raise IndexError('Vector can only be initialized with a str, a single number or a 3D tuple/list')
-        return np.asarray(value).view(cls)
+        return np.asarray(value, dtype=dtype).view(cls)
 
     def __len__(self):
         return 3
@@ -41,10 +41,10 @@ class Vector(np.ndarray, Parsable):
         return not self == other
 
     def __str__(self):
-        return '<{:f},{:f},{:f}>'.format(self[0], self[1], self[2])
+        return '<{},{},{}>'.format(self[0], self[1], self[2])
 
     def __repr__(self):
-        return 'Vector(({:f},{:f},{:f}))'.format(self[0], self[1], self[2])
+        return 'Vector(({},{},{}))'.format(self[0], self[1], self[2])
 
     @property
     def x(self):

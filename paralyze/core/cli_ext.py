@@ -17,7 +17,9 @@ def get_input(prompt, default=None, options=()):
 
 
 def type_cast(arg):
+    original_arg = arg
     try:
+        arg = ''.join(arg.split())
         if re.fullmatch(AABB.Pattern, arg):
             return AABB.parse(arg)
         if re.fullmatch(Interval.Pattern, arg):
@@ -36,4 +38,4 @@ def type_cast(arg):
         logger.error('error during type conversion: {}'.format(e.args[0]))
         raise e
     # consider everything else a string
-    return str(arg)
+    return original_arg

@@ -13,9 +13,10 @@ class AABB(Parsable):
     # re pattern that matches a valid AABB object (whitespaces removed)
     Pattern = r"\[(?P<min_corner><{0},{0},{0}>),(?P<max_corner><{0},{0},{0}>)\]".format(Parsable.Decimal)
 
-    def __init__(self, min_corner=(0, 0, 0), max_corner=None):
-        self._min = Vector(min_corner)
-        self._max = Vector(max_corner if max_corner is not None else min_corner)
+    def __init__(self, min_corner=(0, 0, 0), max_corner=None, dtype=np.float64):
+        self._min = Vector(min_corner, dtype=dtype)
+        max_corner = max_corner if max_corner is not None else min_corner
+        self._max = Vector(max_corner, dtype=dtype)
 
     def __contains__(self, item):
         return self.contains(item)
@@ -175,8 +176,11 @@ class AABB(Parsable):
         assert isinstance(other, AABB)
         return AABB(np.minimum(self.min, other.min), np.maximum(self.max, other.max))
 
+    def scaled(self, factor):
+        return AABB(self.min * factor, self.max * factor, self.min.dtype)
+
     def shifted(self, delta):
-        return AABB(self.min + delta, self.max + delta)
+        return AABB(self.min + delta, self.max + delta, self.min.dtype)
 
     def slices(self, axis, num_slices):
         return list([slice for slice in self.iter_slices(axis, num_slices)])
