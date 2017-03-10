@@ -63,7 +63,7 @@ class Workspace(object):
     def __load(self):
         settings_file = os.path.join(self._root, SETTINGS_DIR, SETTINGS_FILE)
         with open(settings_file, 'r') as settings:
-            data = json.load(settings, object_hook=ParalyzeJSONDecoder.decode_ext)
+            data = json.load(settings, cls=ParalyzeJSONDecoder)
         return rdict(data)
 
     def __contains__(self, item):

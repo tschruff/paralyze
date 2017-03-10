@@ -96,9 +96,8 @@ def get_template_variables(env, template_file):
 
 
 def save_job_file(env, template_key, context, force=False):
-    """ Parses template variables from template_file and
-    adds them as argument to the command line.
-    Rendered files will be saved to <run_dir>/<job_name>.<suffix_of_template_file>
+    """Parses template variables from template_file and adds them as argument to
+    the command line.
 
     Parameters
     ----------
@@ -138,6 +137,11 @@ def save_job_file(env, template_key, context, force=False):
 
 
 def generate_file_paths(wsp):
+    """
+
+    Rendered files will be saved to
+    <wsp_root>/<run_dir>/<template_key>/<job_name>.<suffix_of_template_file>
+    """
     wsp['files'] = {}
     for key in wsp['templates'].keys():
 
@@ -184,7 +188,7 @@ def main():
 
     args, custom_args = parser.parse_known_args()
 
-    log_level = logging.DEBUG if args.verbose else logging.INFO
+    log_level = logging.INFO if args.verbose else logging.WARNING
     # configure and add stream handler
     logging.basicConfig(format=LOG_STREAM_FORMAT, level=log_level)
 

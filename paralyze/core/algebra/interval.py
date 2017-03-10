@@ -5,7 +5,7 @@ import operator
 
 
 class Interval(Parsable):
-    """ Represents a numeric interval.
+    """Represents a numeric interval.
 
     """
 
@@ -24,14 +24,18 @@ class Interval(Parsable):
 
     def __init__(self, *args, **kwargs):
         """
-        :param args:
-        :param kwargs:
+
+        Parameters
+        ----------
+        args:
+
+        kwargs:
             - min_value
             - max_value
             - min_bound
             - max_bound
             - bounds
-        :return:
+
         """
         args = list(args)
 
@@ -67,11 +71,8 @@ class Interval(Parsable):
         self._op_max = self.MaxBoundOp[self.max_bound]
         self._op_min = self.MinBoundOp[self.min_bound]
 
-        if not self.is_valid():
-            raise ValueError('Invalid interval: %s' % str(self))
-
     def __bool__(self):
-        return self.is_valid()
+        return self.is_valid
 
     def __contains__(self, value):
         return self._op_min(value, self.min) and self._op_max(value, self.max)
@@ -86,12 +87,9 @@ class Interval(Parsable):
     def bounds(self):
         return self.min_bound, self.max_bound
 
+    @property
     def is_valid(self):
         return self.max > self.min
-
-    #############################################
-    # PRIVATE MEMBER METHODS
-    #############################################
 
     @staticmethod
     def inf():

@@ -50,13 +50,25 @@ class Vector(np.ndarray, Parsable):
     def x(self):
         return self[0]
 
+    @x.setter
+    def x(self, x):
+        self[0] = x
+
     @property
     def y(self):
         return self[1]
 
+    @y.setter
+    def y(self, y):
+        self[1] = y
+
     @property
     def z(self):
         return self[2]
+
+    @z.setter
+    def z(self, z):
+        self[2] = z
 
     @property
     def length(self):
@@ -68,7 +80,7 @@ class Vector(np.ndarray, Parsable):
         Parameters
         ----------
         other: Vector
-            The vector to which the angle to should be determined
+            The vector to which the angle to should be calculated.
 
         Returns
         -------
@@ -77,6 +89,7 @@ class Vector(np.ndarray, Parsable):
 
         Examples
         --------
+
         >>> v = Vector((1, 0, 0))
         >>> v.angle((0, 1, 0))
         1.5707963267948966
@@ -109,3 +122,19 @@ class Vector(np.ndarray, Parsable):
 
     def sqr_length(self):
         return np.dot(self, self)
+
+    def update(self, **kwargs):
+        """Updates vector components.
+
+        Parameters
+        ----------
+        kwargs: dict
+            Valid arguments are: x, y, and z.
+
+        """
+        if "x" in kwargs:
+            self.x = kwargs["x"]
+        if "y" in kwargs:
+            self.y = kwargs["y"]
+        if "z" in kwargs:
+            self.z = kwargs["z"]

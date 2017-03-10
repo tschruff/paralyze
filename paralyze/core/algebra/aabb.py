@@ -14,6 +14,7 @@ class AABB(Parsable):
     Pattern = r"\[(?P<min_corner><{0},{0},{0}>),(?P<max_corner><{0},{0},{0}>)\]".format(Parsable.Decimal)
 
     def __init__(self, min_corner=(0, 0, 0), max_corner=None, dtype=np.float64):
+        self._dtype = np.dtype(dtype)
         self._min = Vector(min_corner, dtype=dtype)
         max_corner = max_corner if max_corner is not None else min_corner
         self._max = Vector(max_corner, dtype=dtype)
@@ -34,6 +35,10 @@ class AABB(Parsable):
         return '[{!s},{!s}]'.format(self.min, self.max)
 
     @property
+    def dtype(self):
+        return self._dtype
+
+    @property
     def center(self):
         return (self.min + self.max) / 2.0
 
@@ -41,9 +46,17 @@ class AABB(Parsable):
     def min(self):
         return self._min
 
+    @min.setter
+    def min(self, min_corner):
+        self._min = Vector(min_corner)
+
     @property
     def max(self):
         return self._max
+
+    @max.setter
+    def max(self, max_corner):
+        self._max = Vector(max_corner)
 
     @property
     def size(self):
@@ -51,8 +64,7 @@ class AABB(Parsable):
 
     @property
     def volume(self):
-        size = self.size
-        return size[0] * size[1] * size[2]
+        return self.size.prod()
 
     def is_empty(self):
         """ An AABB is considered empty if the min and max corner are equal
@@ -169,8 +181,8 @@ class AABB(Parsable):
             return False
 
         return other.max[0] > self.min[0] and other.min[0] < self.max[0] and \
-               other.max[1] > self.min[1] and other.min[1] < self.max[1] and \
-               other.max[2] > self.min[2] and other.min[2] < self.max[2]
+            other.max[1] > self.min[1] and other.min[1] < self.max[1] and \
+            other.max[2] > self.min[2] and other.min[2] < self.max[2]
 
     def merged(self, other):
         assert isinstance(other, AABB)
@@ -183,7 +195,7 @@ class AABB(Parsable):
         return AABB(self.min + delta, self.max + delta, self.min.dtype)
 
     def slices(self, axis, num_slices):
-        return list([slice for slice in self.iter_slices(axis, num_slices)])
+        return list([s for s in self.iter_slices(axis, num_slices)])
 
     def iter_slices(self, axis, num_slices, reverse=False):
         """ Iterates over slices along the specified axis.
@@ -203,7 +215,7 @@ class AABB(Parsable):
 
         Returns
         -------
-        slice: AABB
+        slice: iterator
             The next slice
         """
         if isinstance(axis, str) and axis in ['x', 'y', 'z']:
@@ -239,7 +251,7 @@ class AABB(Parsable):
         subs: list
             The list of all octree sub elements
         """
-        return list([sub for sub in self.iter_subs(level)])
+        return list([s for s in self.iter_subs(level)])
 
     def iter_subs(self, level=1):
         """ Iterates over all octree sub elements for the given depth.
@@ -251,7 +263,7 @@ class AABB(Parsable):
 
         Returns
         -------
-        sub: AABB
+        sub: iterator
             The next octree sub element
         """
         if not isinstance(level, int):
@@ -264,3 +276,28 @@ class AABB(Parsable):
         for i in itertools.product(range(factor), repeat=3):
             delta = np.multiply(i, d)
             yield AABB(self.min + delta, self.min + delta + d)
+
+    def update(self, **kwargs):
+        """
+
+        """
+
+        if "min" in kwargs:
+            self.min = kwargs["min"]
+        else:
+            if "x_min" in kwargs:
+                self.min.x = kwargs["x_min"]
+            if "y_min" in kwargs:
+                self.min.y = kwargs["y_min"]
+            if "z_min" in kwargs:
+                self.min.z = kwargs["z_min"]
+
+        if "max" in kwargs:
+            self.max = kwargs["max"]
+        else:
+            if "x_max" in kwargs:
+                self.min.x = kwargs["x_max"]
+            if "y_max" in kwargs:
+                self.min.y = kwargs["y_max"]
+            if "z_max" in kwargs:
+                self.min.z = kwargs["z_max"]

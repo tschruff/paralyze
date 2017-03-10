@@ -6,7 +6,7 @@ import numpy as np
 from glumpy import app, gloo, gl
 from glumpy.transforms import Position, Trackball
 
-from PydroSquid.gui.programs import packing
+from paralyze.gui.programs import packing
 
 # USER INPUT
 # -------------------------------------------------------------------------------------------------
