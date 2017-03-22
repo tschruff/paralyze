@@ -13,9 +13,7 @@ FOUR_THIRDS_PI = 4/3. * math.pi
 
 
 def intersection_volume(domain_slice, sphere):
-    if not domain_slice.intersects(sphere.aabb):
-        return 0.0
-
+    
     c = sphere.center
     v = sphere.volume
     r = sphere.radius
@@ -54,17 +52,12 @@ def create_volume_distribution(domain, bodies, n_slices):
     dz = domain.size.z / n_slices
     num_bodies = len(bodies)
     for k, body in enumerate(bodies):
-        if not domain.contains(body.center):
-            continue
         aabb = body.aabb
         i_min = int((domain_top-aabb.max.z) / dz)
         i_max = int((domain_top-aabb.min.z) / dz) + 1
         print('Mapping body {} of {}'.format(k+1, num_bodies), end='\r')
         for j, domain_slice in enumerate(domain_slices[i_min:i_max]):
-            if domain_slice.contains(aabb):
-                volumes[i_min+j] += sphere.volume
-            else:
-                volumes[i_min+j] += intersection_volume(domain_slice, body)
+            volumes[i_min+j] += intersection_volume(domain_slice, body)
     volumes /= domain.volume / n_slices
     return volumes
 
@@ -110,7 +103,8 @@ def main():
 
     print('Surface:', surface, '; Number of slices:', n_slices, '; Slice height:', dz)
     print('Loading CSB file')
-    bodies = CSBFile.load(bed_path)
+    bodies = CSBFile.load(bed_path, filter=lambda body: domain.contains(body.center))
+    print('{} bodies loaded'.format(len(bodies)))
     columns = {}
     print('Creating depth array')
     columns["depth"] = create_depth_column(domain, n_slices, lambda z: surface-z)

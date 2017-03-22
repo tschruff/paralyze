@@ -134,8 +134,8 @@ class AABB(np.ndarray, Parsable):
         """
         if isinstance(item, AABB):
             return (self.min <= item.min).all() and (item.max < self.max).all()
-
-        item = Vector(item)
+        if not isinstance(item, Vector): # explicitly convert item to Vector
+            item = Vector(item)
         return (self.min <= item).all() and (item < self.max).all()
 
     def intersection(self, other):
@@ -159,7 +159,7 @@ class AABB(np.ndarray, Parsable):
 
     def intersects(self, other):
         """Determines whether ``self`` and ``other`` intersect, i.e. share a
-        common space.
+        common portion of space.
 
         Parameters
         ----------
@@ -188,13 +188,7 @@ class AABB(np.ndarray, Parsable):
         >>> second.intersects(third)
         True
         """
-        assert isinstance(other, AABB)
-        if self.is_empty() or other.is_empty():
-            return False
-
-        return other.max[0] > self.min[0] and other.min[0] < self.max[0] and \
-            other.max[1] > self.min[1] and other.min[1] < self.max[1] and \
-            other.max[2] > self.min[2] and other.min[2] < self.max[2]
+        return (other.max > self.min).all() and (other.min < self.max).all()
 
     def merged(self, other):
         """Returns a new AABB that is the result of merging ``self`` and ``other``.
