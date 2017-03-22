@@ -4,7 +4,7 @@ from .frames import ReferenceFrame
 from .grid import CartesianGrid
 from .interval import Interval
 from .polygon import Polygon
-from .primes import primeFactors, primes, isPrime
+from .primes import prime_factors, primes, is_prime
 from .quaternion import Quaternion
 from .ray import Ray
 from .triangle import Triangle
@@ -18,7 +18,7 @@ __all__ = [
     'CartesianGrid',
     'Interval',
     'Polygon',
-    'primeFactors', 'primes', 'isPrime',
+    'prime_factors', 'primes', 'is_prime',
     'Quaternion',
     'Ray',
     'Triangle',

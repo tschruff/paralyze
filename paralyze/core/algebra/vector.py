@@ -3,6 +3,9 @@ from ..parsable import Parsable
 import numpy as np
 import re
 
+import traceback
+import sys
+
 
 class Vector(np.ndarray, Parsable):
     """ The Vector class represents a 3D vector.
@@ -16,9 +19,9 @@ class Vector(np.ndarray, Parsable):
 
     """
 
-    Pattern = r"\A(?P<value><{0},{0},{0}>)\Z".format(Parsable.Decimal)
+    Pattern = r"(?P<value><{0},{0},{0}>)".format(Parsable.Decimal)
 
-    def __new__(cls, value, dtype=np.float64):
+    def __new__(cls, value=0, dtype=np.float64):
         if isinstance(value, str):
             value = ''.join(value.split())
             if re.match(Vector.Pattern, value):
@@ -28,23 +31,29 @@ class Vector(np.ndarray, Parsable):
         elif not hasattr(value, '__len__'):
             value = (value, value, value)
         elif len(value) != 3:
-            raise IndexError('Vector can only be initialized with a str, a single number or a 3D tuple/list')
+            raise TypeError('Vector cannot be initialized with: {}'.format(value))
         return np.asarray(value, dtype=dtype).view(cls)
 
-    def __len__(self):
-        return 3
+    def __array_wrap__(self, out_arr, context=None):
+        if out_arr.ndim == 0:  # a single scalar
+            return out_arr.item()
+        return np.ndarray.__array_wrap__(self, out_arr, context)
 
     def __eq__(self, other):
+        """
+        """
+        # Do not use (self == other).all() here because that will lead to
+        # infinite recursion!
         return np.array_equal(self, other)
 
     def __ne__(self, other):
         return not self == other
 
     def __str__(self):
-        return '<{},{},{}>'.format(self[0], self[1], self[2])
+        return '<{},{},{}>'.format(self.x, self.y, self.z)
 
     def __repr__(self):
-        return 'Vector(({},{},{}))'.format(self[0], self[1], self[2])
+        return 'Vector(({},{},{}))'.format(self.x, self.y, self.z)
 
     @property
     def x(self):
@@ -138,3 +147,15 @@ class Vector(np.ndarray, Parsable):
             self.y = kwargs["y"]
         if "z" in kwargs:
             self.z = kwargs["z"]
+
+    @staticmethod
+    def x_axis():
+        return Vector((1, 0, 0))
+
+    @staticmethod
+    def y_axis():
+        return Vector((0, 1, 0))
+
+    @staticmethod
+    def z_axis():
+        return Vector((0, 0, 1))

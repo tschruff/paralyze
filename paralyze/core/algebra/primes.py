@@ -2,14 +2,16 @@ import math
 import numpy as np
 
 
-def isPrime(number):
-    assert isinstance(number, int)
+def is_prime(number):
+    """Checks if given ``number`` is a prime.
+    """
+    assert isinstance(number, int), "is_prime only handles integers"
 
     if number == 0 or number == 1:
         return False
-    elif number == 2:
+    if number == 2:
         return True
-    elif number % 2 == 0:
+    if number % 2 == 0:
         return False
     else:
         sqrtN = math.floor(math.sqrt(number))
@@ -45,7 +47,9 @@ def primes(number):
     return np.array(ps)
 
 
-def primeFactors(number):
+def prime_factors(number):
+    """
+    """
     assert isinstance(number, int)
     assert number != 0
 

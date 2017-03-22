@@ -42,8 +42,10 @@ class rdict(MutableMapping):
             while self.contains_var(value):
                 value = self._format.vformat(value, [], self._dict)
 
-        else:
+        elif default is not None:
             value = default
+        else:
+            raise KeyError('rdict has no item with key "{}"!'.format(key))
 
         self._sub.remove(key)
         return value

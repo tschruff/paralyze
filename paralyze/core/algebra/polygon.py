@@ -9,6 +9,12 @@ class Polygon(np.ndarray):
     def __new__(cls, vertices):
         return np.asarray(vertices).view(cls)
 
+    def __array_wrap__(self, out_arr, context=None):
+        out = np.ndarray.__array_wrap__(self, out_arr, context)
+        # FIXME: Same issue as in Vector class
+        print("returning from __array_wrap__: {}".format(out))
+        return out
+
     def __len__(self):
         return self.shape[0]
 

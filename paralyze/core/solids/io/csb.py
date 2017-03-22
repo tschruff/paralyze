@@ -1,4 +1,4 @@
-from paralyze.core.bodies import BodyStorage, Capsule, Cylinder, Plane, Sphere
+from .. import create_capsule, create_cylinder, create_sphere
 from paralyze.core.algebra import Vector
 
 import glob
@@ -25,8 +25,8 @@ class CSBFile(object):
     # public interface members
 
     @staticmethod
-    def load(filename, delimiter=',', **kwargs):
-        bodies = BodyStorage()
+    def load(filename, delimiter=',', dynamic=False, scale=1.0, offset=Vector(0), filter=None):
+        bodies = []
 
         names = glob.glob(filename)
         if not len(names):
@@ -42,7 +42,9 @@ class CSBFile(object):
                     if g_type not in CSBFile.SupportedTypes:
                         logger.warn("Geometry %d is not supported by CSBFile. Skipping import." % g_type)
                     else:
-                        bodies.add(CSBFile.parse_body(g_type, line, **kwargs))
+                        body = CSBFile._parse_body(g_type, line, dynamic, scale, offset)
+                        if filter is None or filter(body):
+                            bodies.append(body)
 
         return bodies
 
@@ -80,37 +82,38 @@ class CSBFile(object):
     # parser methods
 
     @staticmethod
-    def parse_body(geom_type, line, **kwargs):
+    def _parse_body(geom_type, line, dynamic, scale, offset, **kwargs):
         if geom_type == CSBFile.CapsuleType:
-            return CSBFile.parse_capsule(line, **kwargs)
+            return CSBFile._parse_capsule(line, dynamic, scale, offset, **kwargs)
         if geom_type == CSBFile.CylinderType:
-            return CSBFile.parse_cylinder(line, **kwargs)
+            return CSBFile._parse_cylinder(line, dynamic, scale, offset, **kwargs)
         if geom_type == CSBFile.SphereType:
-            return CSBFile.parse_sphere(line, **kwargs)
+            return CSBFile._parse_sphere(line, dynamic, scale, offset, **kwargs)
         elif geom_type == CSBFile.PlaneType:
-            return CSBFile.parse_plane(line, **kwargs)
+            return CSBFile._parse_plane(line, dynamic, scale, offset, **kwargs)
 
     @staticmethod
-    def parse_vector(line):
-        assert len(line) == 3
-        return Vector((float(line[0]), float(line[1]), float(line[2])))
+    def _parse_vector(data, scale=1.0, offset=Vector(0)):
+        assert len(data) == 3
+        vector = Vector((float(data[0]), float(data[1]), float(data[2]))) * scale + offset
+        return vector
 
     @staticmethod
-    def parse_sphere(line, **kwargs):
+    def _parse_sphere(line, dynamic, scale, offset, **kwargs):
         assert int(line[0]) == CSBFile.SphereType
         assert len(line) >= 5
 
-        center = CSBFile.parse_vector(line[1:4])
-        diameter = float(line[4])
+        center = CSBFile._parse_vector(line[1:4], scale, offset)
+        diameter = float(line[4]) * scale
 
-        return Sphere(center, diameter / 2.0, **kwargs)
+        return create_sphere(center, radius=diameter/2, dynamic=dynamic, **kwargs)
 
     @staticmethod
-    def parse_plane(line, **kwargs):
+    def _parse_plane(line, dynamic, scale, offset, **kwargs):
         assert int(line[0]) == CSBFile.PlaneType
         assert len(line) >= 7
 
-        center = CSBFile.parse_vector(line[1:4])
-        normal = CSBFile.parse_vector(line[4:7])
+        center = CSBFile._parse_vector(line[1:4], scale, offset)
+        normal = CSBFile._parse_vector(line[4:7])
 
-        return Plane(center, normal, **kwargs)
+        return create_plane(center, normal=normal, dynamic=dynamic, **kwargs)

@@ -1,6 +1,5 @@
-from PydroSquid.core.algebra import AABB
-from PydroSquid.core.body.io import CSBFile
-from PydroSquid.core.voxel import VoxelVolume
+from paralyze.core.algebra import AABB, Vector
+from paralyze.core.solids.io import CSBFile
 
 import sys
 import math
@@ -12,7 +11,9 @@ import os
 # USER INPUT
 ########################################################################################################################
 
-DOMAIN = '[<23,23,0>,<233,233,350>]'
+DOMAIN = '[<24,24,0>,<136,136,80>]'
+SCALE = 1000.0
+OFFSET = Vector(-240, -240, -50)
 
 INPUT = '/Users/tobs/sciebo/Diss/Data/Packings/periodic-256/beds/uniform-8.csv'
 
@@ -27,9 +28,6 @@ NUM_SLICES = 350
 # SCRIPT
 ########################################################################################################################
 
-def equivalent_sphere_diameter(v):
-    return (v / math.pi * 3.0/4.0)**(1/3.) * 2.0
-
 if INPUT == '' or len(glob.glob(INPUT)) == 0:
     print('ERROR: No such file or directory %s' % INPUT)
     sys.exit()
@@ -41,7 +39,7 @@ if OUTPUT == '':
     OUTPUT = os.path.dirname(os.path.abspath(INPUT)) + 'spatial_volume_distribution_%s.csv' % (['x', 'y', 'z'][AXIS])
 
 domain = AABB.parse(DOMAIN)
-bodies = CSBFile.load(INPUT)
+bodies = CSBFile.load(INPUT, scale=SCALE, offset=OFFSET)
 bodies = bodies.subset(lambda body: domain.intersects(body.domain()))
 
 if len(bodies) == 0:

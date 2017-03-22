@@ -3,7 +3,6 @@ from ..algebra import ReferenceFrame as RF
 from .bodystorage import BodyStorage
 
 import copy
-import uuid
 import abc
 
 

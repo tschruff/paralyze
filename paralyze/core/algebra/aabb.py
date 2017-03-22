@@ -5,19 +5,25 @@ import numpy as np
 import itertools
 
 
-class AABB(Parsable):
-    """ Implements an *immutable* half-open interval (min corner is included, max corner is excluded)
+class AABB(np.ndarray, Parsable):
+    """Implements a half-open interval in 3D space, i.e.
+    the `min_corner` is included and the `max_corner` is excluded
 
     """
 
     # re pattern that matches a valid AABB object (whitespaces removed)
     Pattern = r"\[(?P<min_corner><{0},{0},{0}>),(?P<max_corner><{0},{0},{0}>)\]".format(Parsable.Decimal)
 
-    def __init__(self, min_corner=(0, 0, 0), max_corner=None, dtype=np.float64):
-        self._dtype = np.dtype(dtype)
-        self._min = Vector(min_corner, dtype=dtype)
-        max_corner = max_corner if max_corner is not None else min_corner
-        self._max = Vector(max_corner, dtype=dtype)
+    def __new__(cls, min_corner=0, max_corner=None, dtype=np.float64):
+        min_corner = Vector(min_corner, dtype=dtype)
+        max_corner = Vector(max_corner, dtype=dtype) if max_corner is not None else min_corner
+        array = min_corner.tolist() + max_corner.tolist()
+        return np.asarray(array, dtype=dtype).view(cls)
+
+    def __array_wrap__(self, out_arr, context=None):
+        if out_arr.ndim == 0:  # a single scalar
+            return out_arr.item()
+        return np.ndarray.__array_wrap__(self, out_arr, context)
 
     def __contains__(self, item):
         return self.contains(item)
@@ -35,39 +41,44 @@ class AABB(Parsable):
         return '[{!s},{!s}]'.format(self.min, self.max)
 
     @property
-    def dtype(self):
-        return self._dtype
-
-    @property
     def center(self):
         return (self.min + self.max) / 2.0
 
     @property
     def min(self):
-        return self._min
+        """The min (low left) corner of the AABB as a Vector.
+        """
+        return self[:3].view(Vector)
 
     @min.setter
     def min(self, min_corner):
-        self._min = Vector(min_corner)
+        self[:3] = Vector(min_corner)
 
     @property
     def max(self):
-        return self._max
+        """The max (top right) corner of the AABB as a Vector.
+        """
+        return self[3:].view(Vector)
 
     @max.setter
     def max(self, max_corner):
-        self._max = Vector(max_corner)
+        self[3:] = Vector(max_corner)
 
     @property
     def size(self):
+        """The size of the AABB as a Vector.
+        """
         return self.max - self.min
 
     @property
     def volume(self):
-        return self.size.prod()
+        """The volume of the AABB, i.e. the product of its size components.
+        """
+        size = self.size
+        return size[0] * size[1] * size[2]
 
     def is_empty(self):
-        """ An AABB is considered empty if the min and max corner are equal
+        """An AABB is considered empty if the min and max corner are equal.
 
         Returns
         -------
@@ -77,7 +88,8 @@ class AABB(Parsable):
         return self.min == self.max
 
     def is_valid(self):
-        """ An AABB is considered valid if all three size components are greater or equal to zero.
+        """An AABB is considered valid if all three size components are greater
+        or equal to zero.
 
         Returns
         -------
@@ -87,7 +99,7 @@ class AABB(Parsable):
         return self.size[0] >= 0 and self.size[1] >= 0 and self.size[2] >= 0
 
     def contains(self, item):
-        """ Tests whether a given *item* is contained in the AABB.
+        """Tests whether a given *item* is contained in the AABB.
 
         Parameters
         ----------
@@ -121,33 +133,33 @@ class AABB(Parsable):
         False
         """
         if isinstance(item, AABB):
-            return (self.min[0] <= item.min[0] and self.min[1] <= item.min[1] and self.min[2] <= item.min[2]) and\
-                   (item.max[0] < self.max[0] and item.max[1] < self.max[1] and item.max[2] < self.max[2])
+            return (self.min <= item.min).all() and (item.max < self.max).all()
 
         item = Vector(item)
-        return (self.min[0] <= item.x and self.min[1] <= item.y and self.min[2] <= item.z) and\
-               (item.x < self.max[0] and item.y < self.max[1] and item.z < self.max[2])
+        return (self.min <= item).all() and (item < self.max).all()
 
     def intersection(self, other):
-        """ Calculates and returns the intersect between this AABB instance and another or None
-        if AABBs do not intersect.
+        """Calculates and returns the intersect between this AABB instance and
+        ``other`` or ``None`` if they do not intersect.
 
         Parameters
         ----------
         other: AABB
-            Another AABB instance to build the intersect with
+            Another AABB instance to build the intersect with.
 
         Returns
         -------
         intersection: AABB or None
-            The intersection AABB or None if *self* and *other* do not intersect
+            The intersection AABB or ``None`` if ``self`` and ``other`` do not
+            intersect.
         """
         if self.intersects(other):
             return AABB(np.maximum(self.min, other.min), np.minimum(self.max, other.max))
         return None
 
     def intersects(self, other):
-        """ Determines whether *self* and *other* intersect, i.e. share a common part of the 3D space.
+        """Determines whether ``self`` and ``other`` intersect, i.e. share a
+        common space.
 
         Parameters
         ----------
@@ -185,20 +197,32 @@ class AABB(Parsable):
             other.max[2] > self.min[2] and other.min[2] < self.max[2]
 
     def merged(self, other):
+        """Returns a new AABB that is the result of merging ``self`` and ``other``.
+
+        Parameters
+        ----------
+        other: AABB
+            The AABB to merge ``self`` with.
+
+        Returns
+        -------
+        merged: AABB
+            The new AABB that is the result of the merging.
+        """
         assert isinstance(other, AABB)
-        return AABB(np.minimum(self.min, other.min), np.maximum(self.max, other.max))
+        return AABB(np.minimum(self.min, other.min), np.maximum(self.max, other.max), self.dtype)
 
     def scaled(self, factor):
-        return AABB(self.min * factor, self.max * factor, self.min.dtype)
+        return AABB(self.min * factor, self.max * factor, self.dtype)
 
     def shifted(self, delta):
         return AABB(self.min + delta, self.max + delta, self.min.dtype)
 
-    def slices(self, axis, num_slices):
-        return list([s for s in self.iter_slices(axis, num_slices)])
+    def slices(self, axis, num_slices, reverse=False):
+        return list([s for s in self.iter_slices(axis, num_slices, reverse)])
 
     def iter_slices(self, axis, num_slices, reverse=False):
-        """ Iterates over slices along the specified axis.
+        """Iterates over slices along the specified axis.
 
         Parameters
         ----------

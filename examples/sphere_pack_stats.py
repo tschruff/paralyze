@@ -17,10 +17,10 @@ from paralyze.core.algebra import AABB
 # === GENERAL ===
 
 # absolute path to input csb file(s)
-INPUT = '/Users/tobs/sciebo/Data/Bodies/640p/packed_ln-8-1.1-0.5.csv'
+INPUT = '/Users/tobs/Programming/PlayGround/sandbox/csb_out/coarse/simulation_step_10000.csv'
 
 # used to scale input to SI units, i.e. [m]
-SCALING_FACTOR = 1
+SCALING_FACTOR = .001
 
 # sieves to classify the grain sizes, in mm
 SIEVES = np.arange(0.25, 64.25, 0.5)
@@ -209,7 +209,7 @@ minor_xticks = GRAIN_SIZE_CLASSES[GSD_MODE][1]
 minor_xtick_labels = [str(int(-math.log(c, 2))) for c in GRAIN_SIZE_CLASSES[GSD_MODE][1]]
 
 ax0 = fig.add_subplot(3, 1, 1)
-counts, bins, patches = ax0.hist(map(lambda d: d * 1000.0, diameters), bins=map(lambda sieve: sieve * 1000.0, sieves),
+counts, bins, patches = ax0.hist(list(map(lambda d: d * 1000.0, diameters)), bins=list(map(lambda sieve: sieve * 1000.0, sieves)),
                                  color='k')
 ax0.axvline(gm * 1000.0, color='b', linewidth=1, linestyle='--')
 [i.set_linewidth(1.5) for i in ax0.spines.values()]
@@ -223,7 +223,7 @@ ax0.set_yscale('log')
 ax0.set_ylabel('Count')
 
 ax1 = fig.add_subplot(3, 1, 2)
-ax1.plot(map(lambda d: d * 1000.0, avg_diameters), volume_fractions, color='k', marker='x', markersize=M_SIZE, lw=1)
+ax1.plot(list(map(lambda d: d * 1000.0, avg_diameters)), volume_fractions, color='k', marker='x', markersize=MARKER_SIZE, lw=1)
 ax1.axvline(gm * 1000.0, color='b', linewidth=1, linestyle='--')
 [i.set_linewidth(1.5) for i in ax1.spines.values()]
 ax1.set_xscale('log')
@@ -236,7 +236,7 @@ ax1.xaxis.grid(b=True, which='major', color='0.1', linestyle='-', lw=1.5)
 ax1.set_ylabel('Fraction finer, in mass-%')
 
 ax2 = fig.add_subplot(3, 1, 3)
-ax2.plot(map(lambda d: d * 1000.0, sieves[1:]), acc_volume_fractions, color='k', marker='x', markersize=M_SIZE, lw=1)
+ax2.plot(list(map(lambda d: d * 1000.0, sieves[1:])), acc_volume_fractions, color='k', marker='x', markersize=MARKER_SIZE, lw=1)
 ax2.axvline(gm * 1000.0, color='b', linewidth=1, linestyle='--')
 [i.set_linewidth(1.5) for i in ax2.spines.values()]
 ax2.set_xscale('log')

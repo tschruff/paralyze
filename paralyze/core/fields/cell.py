@@ -5,7 +5,7 @@ import numpy as np
 
 class Cell(np.ndarray, Parsable):
 
-    Pattern = r"\A(?P<value>\({0},{0},{0}\))\Z".format(Parsable.Integer)
+    Pattern = r"(?P<value>\({0},{0},{0}\))".format(Parsable.Integer)
 
     def __new__(cls, value):
         if isinstance(value, str):

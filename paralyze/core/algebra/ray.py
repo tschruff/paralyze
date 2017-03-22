@@ -1,9 +1,11 @@
+from .vector import Vector
+
 
 class Ray(object):
 
     def __init__(self, origin, direction):
-        self._origin = origin
-        self._direction = direction.normalized()
+        self._origin = Vector(origin)
+        self._direction = Vector(direction).normalized()
 
     def at(self, t):
         return self.origin + self.direction * t
@@ -15,3 +17,15 @@ class Ray(object):
     @property
     def origin(self):
         return self._origin
+
+    @staticmethod
+    def x_axis():
+        return Ray(0, Vector.x_axis())
+
+    @staticmethod
+    def y_axis():
+        return Ray(0, Vector.y_axis())
+
+    @staticmethod
+    def z_axis():
+        return Ray(0, Vector.z_axis())

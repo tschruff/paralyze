@@ -1,0 +1,32 @@
+{
+    "__paralyze_version__": "{PARALYZE_VERSION}",
+
+    "app_dir": "apps",
+    "app_file": "<not-set>",
+    "app_path": "{app_dir}/{app_file}",
+
+    "job_type": "",
+    "job_name": "",
+
+    "jobs": {
+        "other_job": {
+            "app_dir": "other_apps",
+            "app_file": "other_app_file"
+        }
+    },
+
+    "templates": {
+        "job": "<not-set>.sh",
+        "config": "<not-set>.dat"
+    },
+
+    "files": {
+        "job": "",
+        "config": ""
+    },
+
+    "template_dirs": "",
+
+    "run_dir": "",
+    "schedule_cmd": "echo {files[job]}"
+}

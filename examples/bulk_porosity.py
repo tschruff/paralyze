@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python
 
 from paralyze.core.blocks import UniformBlockStorage
 from paralyze.core.bodies import Sphere
@@ -8,11 +8,10 @@ from paralyze.analysis.body.mapping import map_bodies_to_field
 from paralyze.analysis.field.io import save_field
 
 import os
-
 import numpy as np
 
 
-WORK_FOLDER = '/Users/tobs/Programming/PlayGround/PydroSquid'
+WORK_FOLDER = '/Users/tobs/Programming/PlayGround/paralyze'
 INPUT = 'uniform-2'
 
 OUTPUT_FORMAT = 'vxl'

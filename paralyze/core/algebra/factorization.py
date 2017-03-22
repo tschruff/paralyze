@@ -1,15 +1,31 @@
-import numpy as np
+from .primes import prime_factors
 
-from .primes import primeFactors
+import numpy as np
 
 
 def factors(number, numberOfFactors, weights=None):
+    """Factorizes given ``number`` into ``numberOfFactors`` prime numbers.
+
+    Parameters
+    ----------
+    numbers: int
+        The int that is factorized.
+    numberOfFactors: int
+        The number of factors into which ``number`` is factorized.
+    weights: list
+        An optional list of weights that a length of ``numberOfFactors``.
+
+    Returns
+    -------
+    factors: list
+        The list of factors with len(factors) == numberOfFactors.
+    """
     assert isinstance(number, int)
-    assert numberOfFactors > 0
+    assert isinstance(numberOfFactors, int) and numberOfFactors > 0
     assert weights is None or len(weights) == numberOfFactors
 
     fs = np.array([1 for i in range(numberOfFactors)])
-    primes = primeFactors(number)
+    primes = prime_factors(number)
 
     if weights is None:
         weights = fs
@@ -25,12 +41,16 @@ def factors(number, numberOfFactors, weights=None):
 
 
 def factors2D(number, weights=None):
+    """Convenience method of ``factors`` with numberOfFactors == 2.
+    """
     assert isinstance(number, int)
     assert weights is None or len(weights) == 2
     return factors(number, 2, weights)
 
 
 def factors3D(number, weights=None):
+    """Convenience method of ``factors`` with numberOfFactors == 3.
+    """
     assert isinstance(number, int)
     assert weights is None or len(weights) == 3
     return factors(number, 3, weights)

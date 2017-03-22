@@ -4,8 +4,8 @@ import numpy as np
 
 
 class Vertex(np.ndarray):
-    """ A Vertex is a composite ndarray of two Vectors,
-    i.e. position and normal.
+    """ A Vertex is a composite ndarray of two Vectors:
+    position and normal vector.
 
     v = [[px,py,pz],
          [nx,ny,nz]]
@@ -13,7 +13,13 @@ class Vertex(np.ndarray):
     """
 
     def __new__(cls, pos, normal=Vector(0)):
-        return np.asarray([Vector(pos), Vector(normal)]).view(cls)
+        return np.asarray(Vector(pos) + Vector(normal)).view(cls)
+
+    def __array_wrap__(self, out_arr, context=None):
+        out = np.ndarray.__array_wrap__(self, out_arr, context)
+        # FIXME: Same issue as in Vector class
+        print("returning from __array_wrap__: {}".format(out))
+        return out
 
     def __repr__(self):
         return 'Vertex(pos={!r}, normal={!r})'.format(self.pos, self.normal)
@@ -30,7 +36,7 @@ class Vertex(np.ndarray):
         pos: Vector
             The position of the vertex
         """
-        return self[0].view(Vector)
+        return self[:3].view(Vector)
 
     @property
     def normal(self):
@@ -41,4 +47,4 @@ class Vertex(np.ndarray):
         normal: Vector
             The normal of the vertex
         """
-        return self[1].view(Vector)
+        return self[3:].view(Vector)

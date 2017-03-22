@@ -1,4 +1,4 @@
-from PydroSquid.core.body.collision.contact import Penetrating
+from paralyze.core.body.collision.contact import Penetrating
 
 
 def detect(block, bodies_id, contact_type=Penetrating):
