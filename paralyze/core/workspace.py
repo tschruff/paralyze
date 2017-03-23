@@ -151,7 +151,6 @@ class Workspace(object):
         settings = {}
         for key in self._raw.keys():
             settings[key] = self.get(key)
-        settings["root_path"] = self.root
         return settings
 
     def keys(self, private=False):
@@ -231,6 +230,7 @@ class Workspace(object):
             self.mkdir(settings_dir)
         # set paralyze version
         settings[VERSION_KEY] = VERSION
+        settings.pop("root_path")
         # save settings to json file
         with self.open(self.settings_file_path, 'w') as settings_file:
             logger.debug('saving paralyze workspace settings to file {}'.format(self.settings_file_path))
@@ -239,6 +239,7 @@ class Workspace(object):
     def _load(self):
         with self.open(self.settings_file_path, 'r') as settings:
             data = json.load(settings, cls=ParalyzeJSONDecoder)
+        data["root_path"] = self.root
         return rdict(data)
 
     def _check_version(self):
