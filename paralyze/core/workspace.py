@@ -138,7 +138,7 @@ class Workspace(object):
 
     @property
     def version(self):
-        return self.get[VERSION_KEY]
+        return self._raw[VERSION_KEY]
 
     def get(self, key, default=None, raw=False):
         if raw:
