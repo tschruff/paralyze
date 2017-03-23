@@ -182,7 +182,7 @@ class Workspace(object):
         # init main logger to enable logging during remaining initialization
         self._init_logger(main_logger)
         # init custom constext extensions
-        self._extension_dirs = self._init_extensions()
+        self._extension_dirs = self._load_context_extensions()
         # init template environment before first template access
         self._template_env  = self._get_template_env()
         remaining_args = self._init_template_variables(remaining_args)
