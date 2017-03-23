@@ -188,8 +188,8 @@ def main():
 
     # SCHEDULE job
     if args.schedule:
-        logger.info('scheduling job "{}" for execution'.format(context['job_name']))
-        os.system(context['schedule_cmd'])
+        logger.info('scheduling job "{}" for execution'.format(wsp['job_name']))
+        os.system(wsp['schedule_cmd'])
 
 
 if __name__ == '__main__':
