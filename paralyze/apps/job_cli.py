@@ -40,17 +40,18 @@ def save_job_file(wsp, template_key, force=False):
     out_file = wsp.get('files')[template_key]
     if os.path.exists(out_file) and not force:
         logger.error('could not create file "{}" because a file with same name already exists!'.format(out_file))
-        return
+        return False
 
     content = wsp.render_template_file(template_key)
     if not len(content):
-        return
+        return False
 
     with open(out_file, 'w') as job:
         job.write(content)
 
     # log progress
     logger.info('created file "{}"'.format(out_file))
+    return True
 
 
 def generate_file_paths(wsp):
@@ -172,7 +173,8 @@ def main():
     # SAVE rendered template files
     for template_key in wsp.get('templates').keys():
         try:
-            save_job_file(wsp, template_key, args.force)
+            if not save_job_file(wsp, template_key, args.force):
+                sys.exit(1)
         except jinja2.exceptions.UndefinedError as e:
             logger.error('usage of undefined parameter "{}" in template "{}"!'.format(e.message, template_key))
             sys.exit(1)
