@@ -537,8 +537,10 @@ class Workspace(object):
         return jinja2.Environment(loader=loader)
 
     def _init_template_variables(self, args):
-        # remove names that already exist in the global context
-        template_vars = self.get_template_variables() - set(self.keys())
+
+        template_vars = self.get_template_variables()
+            - set(self.keys()) # remove names that already exist in the global context
+            - set(self.get_context_extensions().keys()) # remove names that exist in context extensions
 
         if not len(template_vars):
             return []
