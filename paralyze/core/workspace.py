@@ -11,6 +11,7 @@ import getpass
 import jinja2
 import paramiko
 
+from jinja2 import meta
 from .rdict import rdict
 from .cli_ext import type_cast
 from .io.json_ext import ParalyzeJSONDecoder, ParalyzeJSONEncoder
@@ -510,9 +511,9 @@ class Workspace(object):
             logger.error('error while parsing template file "{}": {} (line: {})'.format(template_file, e.message, e.lineno))
             sys.exit(1)
 
-        template_vars = jinja2.meta.find_undeclared_variables(template_ast)
+        template_vars = meta.find_undeclared_variables(template_ast)
 
-        for ref_template in jinja2.meta.find_referenced_templates(template_ast):
+        for ref_template in meta.find_referenced_templates(template_ast):
             template_vars.update(self._get_template_variables(ref_template))
 
         return template_vars
