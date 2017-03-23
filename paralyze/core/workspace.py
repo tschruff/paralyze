@@ -538,7 +538,9 @@ class Workspace(object):
 
     def _init_template_variables(self, args):
 
-        existing_names = set(self.keys()) + set(self.get_context_extensions().keys())
+        existing_names = set(self.keys())
+        existing_names.update(set(self.get_context_extensions().keys()))
+        
         template_vars = self.get_template_variables() - existing_names
 
         if not len(template_vars):
