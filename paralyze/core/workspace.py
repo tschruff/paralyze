@@ -540,7 +540,7 @@ class Workspace(object):
 
         existing_names = set(self.keys())
         existing_names.update(set(self.get_context_extensions().keys()))
-        
+
         template_vars = self.get_template_variables() - existing_names
 
         if not len(template_vars):
@@ -571,9 +571,8 @@ class Workspace(object):
             abs_ext_dir = self.abs_path(extension_dir)
             ext_init = self.abs_path(extension_dir, "__init__.py")
             if self.path_exists(ext_init):
-                sys.path.append(abs_ext_dir)
+                sys.path.append(self.root)
                 mod = importlib.import_module(extension_dir)
-                sys.path.remove(abs_ext_dir)
                 for ext_key in mod.__all__:
                     if ext_key in extensions.keys():
                         logger.warn('duplicate extension "{}". Former extension will be replaced!'.format(ext_key))
