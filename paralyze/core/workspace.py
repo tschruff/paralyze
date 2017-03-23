@@ -151,6 +151,7 @@ class Workspace(object):
         settings = {}
         for key in self._raw.keys():
             settings[key] = self.get(key)
+        settings["root_path"] = self.root
         return settings
 
     def keys(self, private=False):
