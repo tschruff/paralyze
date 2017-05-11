@@ -3,9 +3,6 @@ from ..parsable import Parsable
 import numpy as np
 import re
 
-import traceback
-import sys
-
 
 class Vector(np.ndarray, Parsable):
     """ The Vector class represents a 3D vector.
@@ -40,8 +37,6 @@ class Vector(np.ndarray, Parsable):
         return np.ndarray.__array_wrap__(self, out_arr, context)
 
     def __eq__(self, other):
-        """
-        """
         # Do not use (self == other).all() here because that will lead to
         # infinite recursion!
         return np.array_equal(self, other)
@@ -84,7 +79,7 @@ class Vector(np.ndarray, Parsable):
         return np.linalg.norm(self)
 
     def angle(self, other):
-        """ Returns the angle to *other* in radians.
+        """Returns the angle to *other* in radians.
 
         Parameters
         ----------

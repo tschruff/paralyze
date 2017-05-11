@@ -6,7 +6,17 @@ import abc
 import numpy as np
 
 
+DEFAULT_DTYPE = 'float32'
+
+
 class ISolid(object):
+
+    def __init__(self):
+        self.__id = uuid.uuid4().int
+        self._dirty = False
+
+    def __hash__(self):
+        return self.id
 
     @property
     @abc.abstractmethod
@@ -38,11 +48,21 @@ class ISolid(object):
         """
         raise NotImplementedError
 
+    @property
+    def id(self):
+        return self.__id
+
     @abc.abstractmethod
     def move(self, delta):
         """Moves the center of the solid by a given ``delta`` vector.
         """
         raise NotImplementedError
+
+    def requires_update(self):
+        """Returns a bool indicating whether the solids' state has changed and
+        :func:`update` must be called in order to adjust to the changes.
+        """
+        return self._dirty
 
     @abc.abstractmethod
     def rotate(self, axis, angle):
@@ -62,6 +82,19 @@ class ISolid(object):
         """
         """
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def update_aabb(self):
+        """
+        """
+        raise NotImplementedError
+
+    def update(self):
+        """Update solid state if necessary.
+        """
+        if self._dirty:
+            self.update_aabb()
+            self._dirty = False
 
     @property
     @abc.abstractmethod
@@ -113,6 +146,20 @@ class IDynamicSolid(ISolid):
         """
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def update_inertia(self):
+        """
+        """
+        raise NotImplementedError
+
+    def update(self):
+        """Update solid state if necessary.
+        """
+        if self._dirty:
+            self.update_aabb()
+            self.update_inertia()
+            self._dirty = False
+
     @property
     def inertia_tensor(self):
         """
@@ -153,18 +200,17 @@ class IDynamicSolid(ISolid):
         raise NotImplementedError
 
 
-class PSolid(ISolid, np.ndarray):
-    Parameters = ["center", "quaternion", "aabb"]
-    Length = 13
+class PSolid(ISolid):
 
-    CenterSlice = slice(0, 3)
-    QuatSlice = slice(3, 7)
-    AABBSlice = slice(7, 13)
-
-    def __new__(cls, *args, **kwargs):
-        return np.zeros(cls.Length, dtype=np.float64).view(cls)
+    Length          = 13
+    AABBSlice       = slice(0, 6)
+    CenterSlice     = slice(6, 9)
+    QuaternionSlice = slice(9, 13)
 
     def __init__(self, *args, **kwargs):
+        ISolid.__init__(self)
+
+        self._data = np.zeros(self.Length, dtype=kwargs.get("dtype", DEFAULT_DTYPE))
 
         center = kwargs.get("center", 0)
         rot_axis = kwargs.get("rotation_axis", (1, 0, 0))
@@ -177,40 +223,47 @@ class PSolid(ISolid, np.ndarray):
         if len(args) > 2:
             rot_angle = args[2]
 
+        self._data[self.AABBSlice] = AABB()
         self.center = center
         self.quaternion = Quaternion(axis=rot_axis, angle=rot_angle)
 
     @property
     def aabb(self):
-        return self[self.AABBSlice].view(AABB)
+        return self._data[PSolid.AABBSlice].view(AABB)
 
     @property
     def center(self):
-        return self[self.CenterSlice].view(Vector)
+        return self._data[PSolid.CenterSlice].view(Vector)
 
     @center.setter
-    def center(self, pos):
-        self[self.CenterSlice] = Vector(pos)
+    def center(self, center):
+        self._data[PSolid.CenterSlice] = Vector(center)
+        self._dirty = True
+
+    @property
+    def dtype(self):
+        return self._data.dtype
 
     def move(self, delta):
         """Moves the center of the solid by a given ``delta`` vector.
         """
         self.center += delta
 
-    def rotate(self, axis, angle):
-        """Rotates the solid by ``angle`` around the given ``axis``.
-        """
-        self.quaternion += Quaternion(axis=axis, angle=angle)
-
     @property
     def quaternion(self):
         """Returns a Quaternion view of the quaterion portion of the array.
         """
-        return self[self.QuatSlice].view(Quaternion)
+        return self._data[PSolid.QuaternionSlice].view(Quaternion)
 
     @quaternion.setter
     def quaternion(self, quat):
-        self[self.QuatSlice] = Quaternion(quat)
+        self._data[PSolid.QuaternionSlice] = Quaternion(quat)
+        self._dirty = True
+
+    def rotate(self, axis, angle):
+        """Rotates the solid by ``angle`` around the given ``axis``.
+        """
+        self.quaternion += Quaternion(axis=axis, angle=angle)
 
     @property
     def rotation_matrix(self):
@@ -219,18 +272,23 @@ class PSolid(ISolid, np.ndarray):
     def set_rotation(self, *args, **kwargs):
         self.quaternion = Quaternion(*args, **kwargs)
 
+    def to_array(self):
+        """Returns the numpy array that holds all the solid's data
+        """
+        return self._data
+
 
 class DynamicPSolid(IDynamicSolid, PSolid):
-    Parameters = ["density", "force", "torque", "linear_velocity", "angular_velocity"]
-    Length = PSolid.Length + 13
 
+    Length       = PSolid.Length + 13
     DensityIndex = PSolid.Length
     ForceSlice   = slice(PSolid.Length+1 , PSolid.Length+4 )
     TorqueSlice  = slice(PSolid.Length+4 , PSolid.Length+7 )
     LinVelSlice  = slice(PSolid.Length+7 , PSolid.Length+10)
     AngVelSlice  = slice(PSolid.Length+10, PSolid.Length+13)
+    InertiaSlice = slice(PSolid.Length+13, PSolid.Length+22)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, reserve, *args, **kwargs):
         density = kwargs.pop("density", 1.)
         force = kwargs.pop("force", 0)
         torque = kwargs.pop("torque", 0)
@@ -243,22 +301,6 @@ class DynamicPSolid(IDynamicSolid, PSolid):
         self.linear_velocity = linear_velocity
         self.angular_velocity = angular_velocity
 
-    @property
-    def angular_velocity(self):
-        return self[self.AngVelSlice].view(Vector)
-
-    @angular_velocity.setter
-    def angular_velocity(self, angular_velocity):
-        self[self.AngVelSlice] = Vector(angular_velocity)
-
-    @property
-    def density(self):
-        return self[self.DensityIndex]
-
-    @density.setter
-    def density(self, density):
-        self[self.DensityIndex] = float(density)
-
     def add_force(self, force, pos=None):
         """
         """
@@ -266,39 +308,61 @@ class DynamicPSolid(IDynamicSolid, PSolid):
         if pos is not None:
             self.torque += (pos - self.center) * force
 
-    @property
-    def force(self):
-        """
-        """
-        return self[self.ForceSlice].view(Vector)
-
-    @force.setter
-    def force(self, force):
-        self[self.ForceSlice] = Vector(force)
-
-    def reset_force(self):
-        self.force = Vector(0)
-
-    @property
-    def linear_velocity(self):
-        return self[self.LinVelSlice].view(Vector)
-
-    @linear_velocity.setter
-    def linear_velocity(self, linear_velocity):
-        self[self.LinVelSlice] = Vector(linear_velocity)
-
     def add_torque(self, torque):
         """
         """
         self.torque += torque
 
     @property
-    def torque(self):
-        return self[self.TorqueSlice].view(Vector)
+    def angular_velocity(self):
+        return self._data[self.AngVelSlice].view(Vector)
 
-    @torque.setter
-    def torque(self, torque):
-        self[self.TorqueSlice] = Vector(torque)
+    @angular_velocity.setter
+    def angular_velocity(self, angular_velocity):
+        self._data[self.AngVelSlice] = Vector(angular_velocity)
+
+    @property
+    def density(self):
+        return self._data[self.DensityIndex]
+
+    @density.setter
+    def density(self, density):
+        self._data[self.DensityIndex] = density
+        self._dirty = True
+
+    @property
+    def force(self):
+        """
+        """
+        return self._data[self.ForceSlice].view(Vector)
+
+    @force.setter
+    def force(self, force):
+        self._data[self.ForceSlice] = Vector(force)
+        self._dirty = True
+
+    @property
+    def inertia(self):
+        return self._data[self.InertiaSlice].reshape((3, 3))
+
+    @property
+    def linear_velocity(self):
+        return self._data[self.LinVelSlice].view(Vector)
+
+    @linear_velocity.setter
+    def linear_velocity(self, linear_velocity):
+        self._data[self.LinVelSlice] = Vector(linear_velocity)
+
+    def reset_force(self):
+        self.force = Vector(0)
 
     def reset_torque(self):
         self.torque = Vector(0)
+
+    @property
+    def torque(self):
+        return self._data[self.TorqueSlice].view(Vector)
+
+    @torque.setter
+    def torque(self, torque):
+        self._data[self.TorqueSlice] = Vector(torque)

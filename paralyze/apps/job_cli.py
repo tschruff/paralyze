@@ -141,12 +141,12 @@ def main():
             with open(WORKSPACE_TEMPLATE_FILE, "r") as workspace_file:
                 settings = workspace_file.read().format(PARALYZE_VERSION=VERSION)
                 settings = json.loads(settings, cls=ParalyzeJSONDecoder)
-            wsp = Workspace(auto_create=True, settings=settings)
+            wsp = Workspace(auto_create=True, settings=settings, logger=logger)
             logger.info('created new workspace at {}'.format(wsp.root))
             sys.exit()
         else:
             # create workspace and continue
-            wsp = Workspace()
+            wsp = Workspace(logger=logger)
     except IOError as e:
         print('Error: {}'.format(e.args[0]))
         sys.exit(1)
@@ -162,7 +162,7 @@ def main():
             sys.exit(1)
 
     # initialize workspace variables with command line arguments
-    job_args = wsp.init(custom_args, main_logger=logger)
+    job_args = wsp.init_vars(custom_args)
 
     # check if all required workspace keys exist
     check_workspace(wsp)

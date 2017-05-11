@@ -12,9 +12,7 @@ def create_cylinder(*args, dynamic=False, **kwargs):
 
 
 class Cylinder(PSolid):
-    Parameters = ["radius", "length"]
-    Length = PSolid.Length + 2
-
+    Length      = PSolid.Length + 2
     RadiusIndex = PSolid.Length
     LengthIndex = PSolid.Length + 1
 
@@ -22,15 +20,16 @@ class Cylinder(PSolid):
         radius = kwargs.pop("radius", 1)
         start = Vector(kwargs.pop("start", 0))
         end = Vector(kwargs.pop("end", 1))
+        kwargs["center"] = (start + end) / 2
         PSolid.__init__(self, *args, **kwargs)
         self.radius = radius
         self.length = start.dist(end)
+        self.update_aabb()
 
     def __repr__(self):
         return 'Cylinder(center=%s, radius=%f, length=%f)' % (self.center, self.radius, self.length)
 
-    @property
-    def aabb(self):
+    def update_aabb(self):
         """Returns the axis-aligned bounding box of the cylinder.
 
         An exact bounding box for a cylinder can be calculated by projecting the center line on the
@@ -71,12 +70,12 @@ class Cylinder(PSolid):
         # size = Vector((xsize, ysize, zsize))
 
         size = .5 * np.abs(r[:,0]) * self.length + (np.abs(r[:,1]) + np.abs(r[:,2])) * self.radius
-        aabb = AABB(self.center - size, self.center + size)
+        aabb = AABB(self.center - size, self.center + size, dtype=self.dtype)
 
-        assert aabb.is_valid()
-        assert aabb.contains(self.center)
+        # assert aabb.is_valid()
+        # assert aabb.contains(self.center)
 
-        return aabb
+        self._data[self.AABBSlice] = aabb
 
     def contains(self, point):
         return False
@@ -87,19 +86,19 @@ class Cylinder(PSolid):
 
     @property
     def length(self):
-        return self[self.LengthIndex]
+        return self._data[self.LengthIndex]
 
     @length.setter
     def length(self, length):
-        self[self.LengthIndex] = float(length)
+        self._data[self.LengthIndex] = length
 
     @property
     def radius(self):
-        return self[self.RadiusIndex]
+        return self._data[self.RadiusIndex]
 
     @radius.setter
     def radius(self, radius):
-        self[self.RadiusIndex] = float(radius)
+        self._data[self.RadiusIndex] = radius
 
     @property
     def volume(self):
@@ -111,14 +110,14 @@ class StaticCylinder(Cylinder):
 
 
 class DynamicCylinder(DynamicPSolid, Cylinder):
-    Length = DynamicPSolid.Length + len(Cylinder.Parameters)
+    Length = DynamicPSolid.Length + 2
 
     def __init__(self, *args, **kwargs):
         DynamicPSolid.__init__(self, *args, **kwargs)
         Cylinder.__init__(self, *args, **kwargs)
+        self.update_inertia()
 
-    @property
-    def inertia(self):
+    def update_inertia(self):
         ia = .5 * self.mass * self.radius**2
         ib = self.mass * (.25 * self.radius**2 + 1./12 * self.length**2)
-        return np.array([ia, 0, 0, 0, ib, 0, 0, 0, ib], dtype=np.float64).reshape((3, 3))
+        self._data[self.InertiaSlice] = np.array([ia, 0, 0, 0, ib, 0, 0, 0, ib], dtype=self.dtype)

@@ -6,15 +6,15 @@ import itertools
 
 
 class AABB(np.ndarray, Parsable):
-    """Implements a half-open interval in 3D space, i.e.
-    the `min_corner` is included and the `max_corner` is excluded
+    """Implements a half-open interval in 3D space, i.e. the ``min_corner`` is
+    included and the ```max_corner`` is excluded.
 
     """
 
     # re pattern that matches a valid AABB object (whitespaces removed)
     Pattern = r"\[(?P<min_corner><{0},{0},{0}>),(?P<max_corner><{0},{0},{0}>)\]".format(Parsable.Decimal)
 
-    def __new__(cls, min_corner=0, max_corner=None, dtype=np.float64):
+    def __new__(cls, min_corner=0, max_corner=None, dtype=np.float32):
         min_corner = Vector(min_corner, dtype=dtype)
         max_corner = Vector(max_corner, dtype=dtype) if max_corner is not None else min_corner
         array = min_corner.tolist() + max_corner.tolist()
@@ -33,6 +33,18 @@ class AABB(np.ndarray, Parsable):
 
     def __eq__(self, other):
         return self.min == other.min and self.max == other.max
+
+    def __and__(self, other):
+        return self.intersection(other)
+
+    def __iand__(self, other):
+        self = self.intersection(other)
+
+    def __or__(self, other):
+        return self.merged(other)
+
+    def __ior__(self, other):
+        self = self.merged(other)
 
     def __repr__(self):
         return 'AABB({!s},{!s})'.format(self.min, self.max)
@@ -66,19 +78,21 @@ class AABB(np.ndarray, Parsable):
 
     @property
     def size(self):
-        """The size of the AABB as a Vector.
+        """Returns the size of the AABB, i.e. the length along all three axes.
         """
         return self.max - self.min
 
     @property
     def volume(self):
-        """The volume of the AABB, i.e. the product of its size components.
+        """Returns the volume of the AABB, i.e. the product of its size components.
         """
         size = self.size
         return size[0] * size[1] * size[2]
 
     def is_empty(self):
-        """An AABB is considered empty if the min and max corner are equal.
+        """Returns the empy state of the AABB.
+
+        An AABB is considered empty if the min and max corner are equal.
 
         Returns
         -------
@@ -88,12 +102,14 @@ class AABB(np.ndarray, Parsable):
         return self.min == self.max
 
     def is_valid(self):
-        """An AABB is considered valid if all three size components are greater
+        """Returns the validity of the AABB.
+
+        An AABB is considered valid if all three size components are greater
         or equal to zero.
 
         Returns
         -------
-        result: bool
+        bool:
             A bool indicating whether the AABB is considered valid.
         """
         return self.size[0] >= 0 and self.size[1] >= 0 and self.size[2] >= 0
@@ -108,7 +124,7 @@ class AABB(np.ndarray, Parsable):
 
         Returns
         -------
-        result: bool
+        bool:
             The result of the test
 
         Notes
@@ -149,7 +165,7 @@ class AABB(np.ndarray, Parsable):
 
         Returns
         -------
-        intersection: AABB or None
+        AABB or None:
             The intersection AABB or ``None`` if ``self`` and ``other`` do not
             intersect.
         """
@@ -168,12 +184,8 @@ class AABB(np.ndarray, Parsable):
 
         Returns
         -------
-        intersects: bool
+        bool:
             The result of the intersection test
-
-        Notes
-        -----
-        This method will return False if one of both AABBs is empty.
 
         Examples
         --------
@@ -200,17 +212,16 @@ class AABB(np.ndarray, Parsable):
 
         Returns
         -------
-        merged: AABB
+        AABB:
             The new AABB that is the result of the merging.
         """
-        assert isinstance(other, AABB)
         return AABB(np.minimum(self.min, other.min), np.maximum(self.max, other.max), self.dtype)
 
     def scaled(self, factor):
-        return AABB(self.min * factor, self.max * factor, self.dtype)
+        return AABB(self.min * factor, self.max * factor)
 
     def shifted(self, delta):
-        return AABB(self.min + delta, self.max + delta, self.min.dtype)
+        return AABB(self.min + delta, self.max + delta)
 
     def slices(self, axis, num_slices, reverse=False):
         return list([s for s in self.iter_slices(axis, num_slices, reverse)])
@@ -233,7 +244,7 @@ class AABB(np.ndarray, Parsable):
 
         Returns
         -------
-        slice: iterator
+        iterator:
             The next slice
         """
         if isinstance(axis, str) and axis in ['x', 'y', 'z']:
@@ -266,13 +277,13 @@ class AABB(np.ndarray, Parsable):
 
         Returns
         -------
-        subs: list
+        list:
             The list of all octree sub elements
         """
-        return list([s for s in self.iter_subs(level)])
+        return [s for s in self.iter_subs(level)]
 
     def iter_subs(self, level=1):
-        """ Iterates over all octree sub elements for the given depth.
+        """Iterates over all octree sub elements for the given depth.
 
         Parameters
         ----------
@@ -281,7 +292,7 @@ class AABB(np.ndarray, Parsable):
 
         Returns
         -------
-        sub: iterator
+        iterator:
             The next octree sub element
         """
         if not isinstance(level, int):
@@ -296,12 +307,10 @@ class AABB(np.ndarray, Parsable):
             yield AABB(self.min + delta, self.min + delta + d)
 
     def update(self, **kwargs):
+        """Update the corner coordinates.
         """
-
-        """
-
         if "min" in kwargs:
-            self.min = kwargs["min"]
+            self.min = Vector(kwargs["min"])
         else:
             if "x_min" in kwargs:
                 self.min.x = kwargs["x_min"]
@@ -311,7 +320,7 @@ class AABB(np.ndarray, Parsable):
                 self.min.z = kwargs["z_min"]
 
         if "max" in kwargs:
-            self.max = kwargs["max"]
+            self.max = Vector(kwargs["max"])
         else:
             if "x_max" in kwargs:
                 self.min.x = kwargs["x_max"]

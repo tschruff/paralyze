@@ -1,6 +1,6 @@
-from .parsable import Parsable
-from .algebra import AABB, Interval, Vector
-from .fields import Cell, CellInterval
+from paralyze.core import Parsable
+from paralyze.core.fields import Cell, CellInterval
+from paralyze.core.algebra import AABB, Interval, Vector
 
 import re
 import ast

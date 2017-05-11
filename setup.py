@@ -1,8 +1,31 @@
 from setuptools import setup
+from setuptools.command.install import install
 from codecs import open
 from os import path
 
+from paralyze.core import solids
+
+
 here = path.abspath(path.dirname(__file__))
+
+
+class InstallCommand(install):
+    description = ''
+    user_options = install.user_options + [
+        ('solid_dtype=', 'float32', "default numpy dtype of solids' data")
+    ]
+
+    def initialize_options(self):
+        install.initialize_options(self)
+        self.solid_dtype = 'float32'
+
+    def finalize_options(self):
+        #print('The custom option for install is ', self.custom_option)
+        install.finalize_options(self)
+
+    def run(self):
+        solids.DEFAULT_DTYPE = self.solid_dtype
+        install.run(self)
 
 
 def readme():
@@ -13,8 +36,12 @@ def readme():
 setup(
     name='paralyze',
     version='0.1.0a1',
-    description='A scientific parallel framework for geometry analysis',
+    description='A scientific framework for parallel computational geometry',
     long_description=readme(),
+
+    cmdclass = {
+        'install': InstallCommand
+    },
 
     classifiers=[
         'Development Status :: 3 - Alpha',

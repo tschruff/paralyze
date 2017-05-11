@@ -1,5 +1,5 @@
-from ..parsable import Parsable
 from .cell import Cell
+from ..parsable import Parsable
 
 import numpy as np
 
@@ -55,6 +55,10 @@ class CellInterval(Parsable):
 
     def __str__(self):
         return '[{!s}...{!s}]'.format(self.min, self.max)
+
+    @property
+    def bounds(self):
+        return self.min, self.max
 
     @property
     def min(self):

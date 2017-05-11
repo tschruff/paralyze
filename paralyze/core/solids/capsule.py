@@ -12,8 +12,7 @@ def create_capsule(*args, dynamic=False, **kwargs):
 
 
 class Capsule(PSolid):
-    Parameters = ["radius", "length"]
-    Length = PSolid.Length + 2
+    Length      = PSolid.Length + 2
     RadiusIndex = PSolid.Length
     LengthIndex = PSolid.Length + 1
 
@@ -21,15 +20,16 @@ class Capsule(PSolid):
         radius = kwargs.pop("radius", 1)
         start = Vector(kwargs.pop("start", 0))
         end = Vector(kwargs.pop("end", 1))
+        kwargs["center"] = (start + end) / 2
         PSolid.__init__(self, *args, **kwargs)
         self.radius = radius
         self.length = start.dist(end)
+        self.update_aabb()
 
     def __repr__(self):
         return 'Capsule(center=%s, radius=%f, length=%f)' % (self.center, self.radius, self.length)
 
-    @property
-    def aabb(self):
+    def update_aabb(self):
         """
         """
         r = self.rotation_matrix
@@ -42,7 +42,7 @@ class Capsule(PSolid):
 
         size = np.abs(r[:,0]) * self.length * .5 + Vector(self.radius)
 
-        return AABB(self.center - size, self.center + size)
+        self._data[self.AABBSlice] = AABB(self.center - size, self.center + size, dtype=self.dtype)
 
     def contains(self, point):
         return False
@@ -53,19 +53,19 @@ class Capsule(PSolid):
 
     @property
     def length(self):
-        return self[self.LengthIndex]
+        return self._data[self.LengthIndex]
 
     @length.setter
     def length(self, length):
-        self[self.LengthIndex] = float(length)
+        self._data[self.LengthIndex] = length
 
     @property
     def radius(self):
-        return self[self.RadiusIndex]
+        return self._data[self.RadiusIndex]
 
     @radius.setter
     def radius(self, radius):
-        self[self.RadiusIndex] = float(radius)
+        self._data[self.RadiusIndex] = radius
 
     @property
     def volume(self):
@@ -79,21 +79,22 @@ class StaticCapsule(Capsule):
 
 
 class DynamicCapsule(DynamicPSolid, Capsule):
-    Length = DynamicPSolid.Length + len(Capsule.Parameters)
+    Length = DynamicPSolid.Length + 2
 
     def __init__(self, *args, **kwargs):
         DynamicPSolid.__init__(self, *args, **kwargs)
         Capsule.__init__(self, *args, **kwargs)
+        self.update_inertia()
 
-    @property
-    def inertia(self):
-        density = self.density
-        radius = self.radius
-        length = self.length
+    def update_inertia(self):
+        rho = self.density
+        r = self.radius
+        l = self.length
 
-        sphere_mass = 4./3 * math.pi * radius**3 * density
-        cylinder_mass = math.pi * radius**2 * length * density
+        m_s = 4./3 * math.pi * r**3 * rho # mass of cap sphere
+        m_c = math.pi * r**2 * l * rho # mass of cylinder
 
-        ia = radius**2 * (.5 * cylinder_mass + .4 * sphere_mass)
-        ib = cylinder_mass * (.25 * radius**2 + 1./12 * length**2) + sphere_mass * (.4 * radius**2 + .375 * radius * length + .25 * length**2)
-        return np.array([ia, 0, 0, 0, ib, 0, 0, 0, ib], dtype=np.float64).reshape((3, 3))
+        ia = r**2 * (.5 * m_c + .4 * m_s)
+        ib = m_c * (.25 * r**2 + 1./12 * l**2) + m_s * (.4 * r**2 + .375 * r * l + .25 * l**2)
+
+        self._data[self.InertiaSlice] = np.array([ia, 0, 0, 0, ib, 0, 0, 0, ib], dtype=self.dtype)

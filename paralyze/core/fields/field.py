@@ -5,9 +5,8 @@ import numpy as np
 
 
 class Field(object):
-    """ The Field class wraps a numpy array and adds some features such as
-    cell interval and ghost layers
-
+    """A ``Field`` stores a numpy.ndarray and adds some features such as
+    cell interval and ghost layers.
     """
 
     def __init__(self, size, dtype, ghost_level=0, init=0):
@@ -21,7 +20,8 @@ class Field(object):
             self._data[index[0], index[1], index[2]] = value
         if isinstance(index, CellInterval):
             index = index.shifted(self._gl)
-            self._data[index.min[0]:index.max[0]+1, index.min[1]:index.max[1]+1, index.min[2]:index.max[2]+1] = value
+            imin, imax = index.bounds
+            self._data[imin[0]:imax[0]+1, imin[1]:imax[1]+1, imin[2]:imax[2]+1] = value
         else:
             self._data[index] = value
 

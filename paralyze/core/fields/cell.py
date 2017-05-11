@@ -28,6 +28,9 @@ class Cell(np.ndarray, Parsable):
     def __str__(self):
         return '({c[0]:d}, {c[1]:d}, {c[2]:d})'.format(c=self)
 
+    def shifted(self, delta):
+        return self + Cell(delta)
+
     @property
     def x(self):
         return self[0]

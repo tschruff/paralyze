@@ -3,7 +3,7 @@ from ..bodies.bodystorage import BodyStorage
 
 
 class Block(object):
-    """ The Block class provides generic data storage in form of
+    """The Block class provides generic data storage in form of
     a simple Python dict.
 
     :ivar _id: A unique block id. There are no constraints for the type of the id.
@@ -37,12 +37,18 @@ class Block(object):
         return self._data.get(identifier, default)
 
     def add_field(self, identifier, dtype, ghost_level=0, init=0):
-        """ Adds a new field with given parameters to the block.
+        """Adds a new field with given parameters to the block.
 
-        :param identifier: Unique field identifier.
-        :param dtype: Numpy array dtype.
-        :param ghost_level: Number of ghost layers.
-        :param init: Initial field value.
+        Parameters
+        ----------
+        identifier:
+            Unique field identifier.
+        dtype: numpy.dtype
+            Numpy array dtype.
+        ghost_level: int (0, inf)
+            Number of ghost layers.
+        init: float or int
+            Initial field value.
         """
         self._data[identifier] = Field(self._ci.size, dtype, ghost_level, init)
 

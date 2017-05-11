@@ -1,5 +1,4 @@
 import os
-import posixpath
 import json
 import logging
 import sys
@@ -12,61 +11,33 @@ import jinja2
 import paramiko
 
 from jinja2 import meta
+
 from .rdict import rdict
 from .cli_ext import type_cast
-from .io.json_ext import ParalyzeJSONDecoder, ParalyzeJSONEncoder
+from .json_ext import ParalyzeJSONDecoder, ParalyzeJSONEncoder
+from .remote import RemoteFileSystemLoader
 
 logger = logging.getLogger(__name__)
 
+if not os.path.exists(os.path.expanduser('~/.paralyze')):
+    try:
+        os.mkdir(os.path.expanduser('~/.paralyze'))
+        SSH_LOG_FILE = os.path.expanduser('~/.paralyze/ssh_log.txt')
+        SSH_CON_FILE = os.path.expanduser('~/.paralyze/ssh_conn.txt')
+    except IOError:
+        SSH_LOG_FILE = ""
+        SSH_CON_FILE = ""
+else:
+    SSH_LOG_FILE = os.path.expanduser('~/.paralyze/ssh_log.txt')
+    SSH_CON_FILE = os.path.expanduser('~/.paralyze/ssh_conn.txt')
+
 SETTINGS_DIR = ".paralyze"
+SETTINGS_FILE = "workspace.json"
 
 LOG_FILE = "log.txt"
-SSH_LOG_FILE = "ssh_log.txt"
 LOG_FILE_FORMAT = "[%(asctime)-15s][%(levelname)-7s] %(message)s"
 
-VERSION = "0.1.0"
 VERSION_KEY = "__version__"
-
-SETTINGS_FILE = "workspace.json"
-CONNECTIONS_FILE = "connections.json"
-
-
-class RemoteFileSystemLoader(jinja2.BaseLoader):
-
-    def __init__(self, sftp, *search_path, encoding='utf-8', follow_links=False):
-        self._sftp = sftp
-        self._path = search_path
-        self._enc = encoding
-        self._follow_links = follow_links
-
-    def get_source(self, environment, template):
-        for path in self._path:
-            result = self._get_source(path, environment, template)
-            if len(result):
-                return result
-        raise jinja2.TemplateNotFound(template)
-
-    def _get_source(self, path, environment, template):
-        path = posixpath.join(path, template)
-        if not self._path_exists(path):
-            return ()
-        mtime = self._get_stat(path).st_mtime
-        with self._sftp.file(path, 'r') as f:
-            source = f.read().decode('utf-8')
-        return source, path, lambda: mtime == self._get_stat(path).st_mtime
-
-    def _path_exists(self, path):
-        try:
-            self._get_stat(path)
-            return True
-        except IOError:
-            return False
-
-    def _get_stat(self, path):
-        if self._follow_links:
-            return self._sftp.stat(path)
-        else:
-            return self._sftp.lstat(path)
 
 
 class Workspace(object):
@@ -74,56 +45,54 @@ class Workspace(object):
     """
 
     def __init__(self, *args, **kwargs):
+        """Create new workspace or load existing (remote) workspace settings.
         """
-        """
-        self._conn = None
-        self._sftp = None
-        self._root = ""
         self._builtin_template_vars = set([name for name in __builtins__ if not name.startswith('_')])
         self._extensions = {}
-        self._raw = {}
-        self._temp_dir = ""
+        self._temp_dir = ''
         self._template_env = None
 
-        # parse arguments from command line if they where not provided
+        # try to parse arguments from command line if they where not provided
         # explicitly
         if len(args) + len(kwargs) == 0:
             kwargs = self._parse_args()
         elif len(args) == 1:
-            path = args[0]
-            kwargs["path"] = path
+            kwargs['path'] = args[0]
 
         # create SSH connection if required
         self._conn, self._sftp = self._init_ssh_connection(**kwargs)
 
+        # check if workspace root folder exists
         cwd = self._sftp.getcwd() if self.is_remote() else os.getcwd()
-        path = kwargs.get("path", cwd)
-
-        auto_create = kwargs.get("auto_create", False)
-        settings = kwargs.get("settings", {})
-
-        # absolute path to workspace root folder
+        path = kwargs.get('path', cwd)
         if not self.path_exists(path):
-            raise OSError('No such file or directory "{}""'.format(path))
-
+            raise OSError('No such file or directory "{}"'.format(path))
         self._root = path
 
+        # check if settings file exists, probably create one if not
         if not self.path_exists(self.settings_file_path):
-            if auto_create:
-                self._create(settings)
+            if kwargs.get('auto_create', False):
+                self._create(kwargs.get('settings', {}))
             else:
                 raise OSError('Directory "{}" is not a paralyze workspace'.format(self.root))
 
-        # load raw dict (with variables as raw template strings)
+        # load settings dict (with variables as raw template strings)
         self._raw = self._load()
+        # init main logger
+        self._init_logger(kwargs.get('logger', None))
+        # check workspace and code version compatibility
         self._check_version()
 
     def __del__(self):
         if self.is_remote():
             self._conn.close()
 
-        if self._temp_dir != "":
+        if self._temp_dir != '':
             shutil.rmtree(self._temp_dir)
+
+    # ==============
+    # DICT INTERFACE
+    # ==============
 
     def __contains__(self, item):
         return item in self._raw
@@ -134,54 +103,49 @@ class Workspace(object):
     def __setitem__(self, key, value):
         self._raw[key] = value
 
-    def __str__(self):
-        return str(self.get_settings())
-
-    @property
-    def version(self):
-        return self._raw[VERSION_KEY]
-
     def get(self, key, default=None, raw=False):
         if raw:
             return self._raw.get_raw(key, default)
         else:
             return self._raw.get(key, default)
 
-    def get_settings(self):
-        settings = {}
-        for key in self._raw.keys():
-            settings[key] = self.get(key)
-        return settings
-
-    def keys(self, private=False):
-        if private:
-            return self._raw.keys()
+    @property
+    def keys(self):
         return [key for key in self._raw.keys() if not key.startswith('__')]
 
     def pop(self, key):
         return self._raw.pop(key)
 
-    def update(self, other):
-        self._raw.update(other)
+    @property
+    def settings(self):
+        settings = {}
+        for key in self.keys:
+            settings[key] = self.get(key)
+        return settings
+
+    def update(self, settings):
+        self._raw.update(settings)
+
+    @property
+    def version(self):
+        return self._raw[VERSION_KEY]
 
     # ========================
     # WORKSPACE INITIALIZATION
     # ========================
 
-    def init(self, args=None, main_logger=None):
-        """
+    def init_vars(self, args=None):
+        """Initializes workspace and template variables
 
         Returns
         -------
         remaining_args: list
-            The list of all args that have not been used during initialization.
+            List of all args that have not been used during this initialization.
         """
         args = args or sys.argv
         # init workspace variables first because template or extension settings
         # might depend on workspace variables
         remaining_args = self._init_workspace_variables(args)
-        # init main logger to enable logging during remaining initialization
-        self._init_logger(main_logger)
         # init custom constext extensions
         self._extension_dirs = self._load_context_extensions()
         # init template environment before first template access
@@ -190,9 +154,7 @@ class Workspace(object):
         return remaining_args
 
     def _parse_args(self):
-
         parser = argparse.ArgumentParser()
-        # add job_cli arguments
         parser.add_argument(
             '--create_workspace',
             action='store_true',
@@ -219,11 +181,12 @@ class Workspace(object):
             type=str,
             default=''
         )
-
         args, custom_args = parser.parse_known_args()
         return vars(args)
 
     def _create(self, settings=None):
+        """Creates a new settings file.
+        """
         # create hidden settings folder
         if not self.path_exists(self.settings_dir):
             logger.info('creating paralyze workspace at {}'.format(self.root))
@@ -245,8 +208,8 @@ class Workspace(object):
     def _check_version(self):
         """TODO: Implement version comparison and policy.
         """
-        wsp_version = self.version
-        core_version = VERSION
+        wsp_version = self.version # workspace version
+        run_version = VERSION      # code version
 
     def _init_workspace_variables(self, args):
         """Initializes variables in the settings dict with values given in args.
@@ -279,8 +242,8 @@ class Workspace(object):
         return unknown_args
 
     def _init_logger(self, main_logger=None):
-        log_level = self.get("log_level", logging.DEBUG)
-        log_format = self.get("log_format", LOG_FILE_FORMAT)
+        log_level = self.get('log_level', logging.DEBUG)
+        log_format = self.get('log_format', LOG_FILE_FORMAT)
 
         file_handler = logging.FileHandler(self.log_file_path)
         file_handler.setFormatter(logging.Formatter(log_format))
@@ -288,7 +251,6 @@ class Workspace(object):
 
         if main_logger:
             main_logger.addHandler(file_handler)
-
         logger.addHandler(file_handler)
 
     # =======================
@@ -316,7 +278,7 @@ class Workspace(object):
 
     def _init_ssh_connection(self, **kwargs):
         if kwargs.get("connection", False):
-            # TODO: Implement!
+            # TODO: load connection details from file!
             host = ""
             username = ""
             password = ""
@@ -362,7 +324,7 @@ class Workspace(object):
 
     @property
     def log_file_path(self):
-        return self.abs_path(self.get("log_file", LOG_FILE))
+        return self.abs_path(self.get("__log_file__", LOG_FILE))
 
     def rel_path(self, arg):
         if self.is_remote():
