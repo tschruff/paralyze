@@ -2,23 +2,43 @@ from .algebra import AABB, Vector
 from .fields import Cell, CellInterval
 
 
-def map_aabb_to_cell_interval(aabb, field, field_orig, field_res):
+def map_aabb_to_cell_interval(aabb, field_orig, field_res, field=None):
     """Maps an ``aabb`` to a ``CellInterval``of the ``field``.
 
-    The returned CellInterval is ensured to be valid or empty in case aabb does
-    not intersect with the field.
+    Parameters
+    ----------
+    aabb: AABB
+        The domain to be mapped.
+    field_orig: Vector
+
+    field_res: float
+
+    Notes
+    -----
+    Only if ``field`` is specified the returned CellInterval is ensured to be
+    valid or empty in case aabb does not intersect with the field.
     """
-    c_min = Cell(aabb.min-field_orig // field_res)
-    c_max = Cell(aabb.max-field_orig // field_res)
-    return field.cell_interval.intersection(CellInterval(c_min, c_max))
+    c CellInterval(
+        (aabb.min-field_orig)//field_res,
+        (aabb.max-field_orig)//field_res
+    )
+
+    if field is not None:
+        return field.cell_interval.intersection(c)
+    return c
 
 
-def map_solids(solids, field, field_orig=Vector(0), field_res=Vector(1), solid_value=1):
+def map_solids(solids, field, field_orig=Vector(0), field_res=Vector(1), solid_value=1, void_value=0):
     """Maps all ``solids`` onto the ``field``.
 
+    Parameters
+    ----------
+
+    Notes
+    -----
     In contrast to :func:`map_solid_volume_fraction` this function maps solids in
-    a binary manner, i.e. the ``solid_value`` will only be set for the cells whose
-    center is covered by the solid.
+    a binary manner, i.e. the cell value will be set to either ``solid_value``
+    or ``void_value`` depending on whether the cell center is inside the solid.
     """
     for solid in solids:
         cell_interval = map_aabb_to_cell_interval(solid.aabb, field, field_orig, field_res)

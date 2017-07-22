@@ -1,7 +1,7 @@
-from paralyze import ARCH, VERSION
-from paralyze.core import Workspace, type_cast, rdict
-from paralyze.core.io import ParalyzeJSONEncoder
+from paralyze.core.io import ParalyzeJSONEncoder, type_cast
+from paralyze.workspace import *
 
+import paralyze
 import os
 import ast
 import argparse
@@ -15,87 +15,98 @@ logger = logging.getLogger(__name__)
 
 LOG_STREAM_FORMAT = '[%(levelname)-7s] %(message)s'
 
-REQUIRED_WORKSPACE_KEYS = ['job_name', 'run_dir', 'templates', 'template_dirs']
-OPTIONAL_WORKSPACE_KEYS = ['schedule_cmd']
+REQUIRED_WORKSPACE_KEYS = ['job_id', 'job_task', 'tasks', 'templates']
+OPTIONAL_WORKSPACE_KEYS = ['schedule_cmd', 'make_dirs']
 
 # default workspace settings
-WORKSPACE_TEMPLATE_FILE = ""
+DEFAULT_PARAMETER_CONFIG = {}
 
 
-def save_job_file(wsp, template_key, force=False):
-    """Parses template variables from template_file and adds them as argument to
-    the command line.
+def save_job_file(wsp, template, force=False):
+    """Renders and saves the template to a file.
 
     Parameters
     ----------
-    template_key: str
+    template: str
         Name of template
     force: bool
-        Force overriding existing files
+        Force overwriting existing files
 
-    Notes
-    -----
-    Existing files will only be overridden if *force* is set True.
     """
-    out_file = wsp.get('files')[template_key]
+    out_file = wsp.abs_path(wsp.parameters['templates'][template])
     if os.path.exists(out_file) and not force:
-        logger.error('could not create file "{}" because a file with same name already exists!'.format(out_file))
+        logger.error('file "{}" already exists, specify --force to overwrite.'.format(out_file))
         return False
 
-    content = wsp.render_template_file(template_key)
-    if not len(content):
-        return False
+    content = wsp.render_template(template)
 
-    with open(out_file, 'w') as job:
-        job.write(content)
+    with open(out_file, 'w') as dest:
+        dest.write(content)
 
-    # log progress
     logger.info('created file "{}"'.format(out_file))
     return True
 
 
-def generate_file_paths(wsp):
+def make_dirs(wsp):
     """
-
-    Rendered files will be saved to
-    <wsp_root>/<run_dir>/<template_key>/<job_name>.<template_file_suffix>
     """
-    wsp['files'] = {}
-    for key in wsp['templates'].keys():
-
-        template_file = wsp['templates'][key]
-        suffix = template_file[template_file.rfind('.'):]
-        folder = os.path.join(wsp['run_dir'], key)
-        wsp['files'][key] = os.path.join(folder, wsp['job_name'] + suffix)
-
+    for key in wsp.parameters.get('make_dirs', []):
+        folder = wsp.abs_path(key)
         if not os.path.exists(folder):
-            logger.info('creating sub-folder in run_dir "{}"'.format(key))
+            logger.info('creating folder in workspace "{}"'.format(folder))
             try:
                 os.makedirs(folder)
             except OSError as e:
-                logger.error(e.args[0])
+                logger.error(str(e))
                 sys.exit(1)
 
 
 def check_workspace(wsp):
+    """
+    """
     error = False
     for key in REQUIRED_WORKSPACE_KEYS:
-        if key not in wsp:
-            logger.error('Missing required workspace key "{}"'.format(key))
+        if key not in wsp.parameters:
+            logger.error('missing required workspace item "{}"'.format(key))
             error = True
     for key in OPTIONAL_WORKSPACE_KEYS:
-        if key not in wsp:
-            logger.warning('Missing optional workspace key "{}" may cause problems!'.format(key))
+        if key not in wsp.parameters:
+            logger.warning('undefined optional workspace item "{}"'.format(key))
     if error:
         sys.exit(1)
 
 
-def main():
+def import_task_settings(task, wsp):
+    """
+    """
+    if 'tasks' not in wsp.parameters:
+        logger.error('missing parameter config item: tasks')
+        sys.exit(1)
 
+    tasks = wsp.parameters['tasks']
+    if task in tasks:
+        logger.info('temporarily overriding workspace with task variables from "{}"'.format(task))
+        wsp.parameters.update(tasks[task])
+        wsp.parameters['job_task'] = task
+        return wsp
+    else:
+        logger.error('undefined task "{}"'.format(task))
+        sys.exit(1)
+
+
+def perform_tests_and_exit(wsp):
+    """
+    """
+    sys.exit(0)
+
+
+def argument_parser():
+    """
+    """
     parser = argparse.ArgumentParser()
     # add job_cli arguments
     parser.add_argument(
-        '--create_workspace',
+        '--create-workspace',
         action='store_true',
         default=False,
         help="create a new workspace at the current work directory"
@@ -113,10 +124,10 @@ def main():
         help='add job to the system scheduler after creation'
     )
     parser.add_argument(
-        '--job',
+        '--task',
         type=str,
         default='',
-        help='import job settings to the global scope (may replace global settings)'
+        help='import task settings to the global scope (may replace global settings)'
     )
     parser.add_argument(
         '--verbose',
@@ -124,54 +135,68 @@ def main():
         default=False,
         help='increase logging output'
     )
+    parser.add_argument(
+        '--print-vars',
+        action='store_true',
+        default=False,
+        help='prints undefined parameter variables to stdout'
+    )
+    return parser
 
-    args, custom_args = parser.parse_known_args()
+
+def main():
+
+    parser = argument_parser()
+    args, wsp_args = parser.parse_known_args()
 
     if args.verbose:
         log_level = logging.INFO
     else:
         log_level = logging.WARNING
+
     # configure logging and add stream handler
     logging.basicConfig(format=LOG_STREAM_FORMAT, level=log_level)
 
-    # create workspace
+    # create workspace instance
     try:
         if args.create_workspace:
             # create workspace and exit
-            with open(WORKSPACE_TEMPLATE_FILE, "r") as workspace_file:
-                settings = workspace_file.read().format(PARALYZE_VERSION=VERSION)
-                settings = json.loads(settings, cls=ParalyzeJSONDecoder)
-            wsp = Workspace(auto_create=True, settings=settings, logger=logger)
-            logger.info('created new workspace at {}'.format(wsp.root))
+            wsp = Workspace(auto_create=True)
+            logger.info('created new workspace at: {}'.format(wsp.root_dir))
             sys.exit()
         else:
             # create workspace and continue
-            wsp = Workspace(logger=logger)
-    except IOError as e:
-        print('Error: {}'.format(e.args[0]))
+            wsp = Workspace()
+    except OSError as e:
+        logger.error(str(e))
         sys.exit(1)
 
-    # override settings with job specific variables before init the workspace
-    if args.job != '':
-        jobs = wsp.pop('jobs')
-        if args.job in jobs:
-            logger.info('temporarily overriding default workspace settings with job variables from "{}"'.format(args.job))
-            wsp.update(jobs[args.job])
-        else:
-            logger.error('job "{}" does not exist!'.format(args.job))
-            sys.exit(1)
-
-    # initialize workspace variables with command line arguments
-    job_args = wsp.init_vars(custom_args)
+    # import task settings into the top-level namespace
+    import_task_settings(args.task, wsp)
 
     # check if all required workspace keys exist
     check_workspace(wsp)
 
-    # generates a file path for each item in "templates" to the workspace settings
-    generate_file_paths(wsp)
+    # add workspace variables as required command line arguments
+    wsp_parser = argparse.ArgumentParser()
+
+    vars = wsp.get_undefined(wsp.parameters['templates'].keys())
+    if args.print_vars:
+        print('undefined variables: {!s}'.format(vars))
+        sys.exit(0)
+
+    for var in vars:
+        wsp_parser.add_argument('--%s' % var, required=True, type=type_cast)
+    wsp_args, unused_args = wsp_parser.parse_known_args(wsp_args)
+
+    # initialize workspace variables with command line arguments
+    wsp.init_params(**vars(wsp_args))
+
+    # create directories
+    make_dirs(wsp)
 
     # SAVE rendered template files
-    for template_key in wsp.get('templates').keys():
+    for template_key in wsp.parameters['templates'].items():
         try:
             if not save_job_file(wsp, template_key, args.force):
                 sys.exit(1)
@@ -185,12 +210,12 @@ def main():
             logger.error('syntax error in template "{}": {}'.format(template_key, e.message))
             sys.exit(1)
         except IOError as e:
-            logger.error(e.args[0])
+            logger.error(str(e))
             sys.exit(1)
 
     # SCHEDULE job
     if args.schedule:
-        logger.info('scheduling job "{}" for execution'.format(wsp['job_name']))
+        logger.info('scheduling job "{}" for execution'.format(wsp['job_id']))
         os.system(wsp['schedule_cmd'])
 
 

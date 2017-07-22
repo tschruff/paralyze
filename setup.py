@@ -3,7 +3,7 @@ from setuptools.command.install import install
 from codecs import open
 from os import path
 
-from paralyze.core import solids
+import paralyze.solids
 
 
 here = path.abspath(path.dirname(__file__))

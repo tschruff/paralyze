@@ -3,8 +3,8 @@ from paralyze.core.solids.io import CSBFile
 
 import numpy as np
 
-bed = '/Users/tobs/sciebo/Diss/Data/csb/beds/ln-8-1.6.csv'
-out = '/Users/tobs/sciebo/Diss/Data/csb/beds/ln-8-1.6_clipped.csv'
+bed = '/Users/tobs/sciebo/Diss/Data/csb/beds/ln-8-1.1.csv'
+out = '/Users/tobs/sciebo/Diss/Data/csb/beds/ln-8-1.1_clipped.csv'
 
 domain = AABB(0, (160, 160, 310))
 offset = (-216, -216, -50)

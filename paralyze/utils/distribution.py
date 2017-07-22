@@ -3,26 +3,109 @@ import math
 import copy
 import os
 import logging
+import warnings
 
 from scipy import interpolate, stats, special
+from scipy.optimize import curve_fit
+
+
+class Uniform(object):
+
+    def __init__(self, mu):
+        self.mu = float(mu)
+
+    @property
+    def cv(self):
+        """Coefficient of variation.
+        """
+        return 0.0
+
+    @property
+    def gm(self):
+        """Geometric mean.
+        """
+        return self.mu
+
+    @property
+    def gsd(self):
+        """Geometic standard deviation.
+        """
+        return 1.0
+
+    @property
+    def mean(self):
+        return self.mu
+
+    @property
+    def median(self):
+        return self.mu
+
+    @property
+    def mode(self):
+        return self.mu
+
+    @property
+    def sd(self):
+        """Standard deviation.
+        """
+        return 0.0
+
+    @property
+    def sk(self):
+        """Skewness.
+        """
+        return 0.0
+
+    @property
+    def var(self):
+        """Variance.
+        """
+        return 0.0
+
+    def pdf(self, x):
+        """Probability density function.
+        """
+        return 1.0 if x == self.mu else 0.0
+
+    def cdf(self, x):
+        """Cumulative distribution function.
+        """
+        return self.pdf(x)
+
+    def inv(self, c):
+        return self.mu
 
 
 class Lognormal(object):
 
-    def __init__(self, mu, sigma):
+    def __init__(self, mu, sigma, scale=1.0):
         """
 
         Parameters
         ----------
         mu: float (-inf, inf)
             The location parameter, equal to ln(gm).
-        sigma: float (1, inf)
+        sigma: float [0, inf)
             The scale parameter, equal to ln(gsd).
         """
-        self.mu = float(mu)
-        self.sigma = float(sigma)
+        self.mu = mu
+        self.sigma = sigma
+        self.scale = scale
 
-        assert sigma > 0.0, 'sigma must be greater than 0.0'
+        if not np.all(sigma > np.zeros_like(sigma, np.float64)):
+            warnings.warn('sigma must be > 0.0')
+
+    def __mul__(self, scale):
+        s = copy.copy(self)
+        s.scale *= float(scale)
+        return s
+
+    def __rmul__(self, scale):
+        return self * float(scale)
+
+    def __imul__(self, scale):
+        self.scale *= float(scale)
+        return self
 
     @property
     def cv(self):
@@ -30,21 +113,18 @@ class Lognormal(object):
         """
         return np.sqrt(np.exp(self.sigma**2) - 1)
 
-    @property
-    def gm(self):
-        """Geometric mean.
-        """
-        return self.median
+    @classmethod
+    def fit(cls, x, y):
+        popt, pcov = curve_fit(
+            lambda x, mu, sigma: Lognormal(mu, sigma).pdf(x), x, y,
+            bounds=((0, 1e-10), np.inf)
+        )
 
-    @property
-    def gsd(self):
-        """Geometic standard deviation.
-        """
-        return np.exp(self.sigma)
+        return Lognormal(*popt)
 
     @property
     def mean(self):
-        return np.exp(self.mu + self.sigma**2 / 2.)
+        return np.exp(self.mu + self.sigma**2/2.)
 
     @property
     def median(self):
@@ -75,15 +155,21 @@ class Lognormal(object):
     def pdf(self, x):
         """Probability density function.
         """
-        return 1/(x*self.sigma*(2*math.pi)**(0.5))*np.exp(-(np.log(x)-self.mu)**2/(2*self.sigma**2))
+        p = 1./(x*self.sigma*np.sqrt(2*math.pi)) * np.exp(-(np.log(x)-self.mu)**2/(2.*self.sigma**2))
+        return self.scale * p
 
     def cdf(self, x):
         """Cumulative distribution function.
         """
-        return 0.5 + 0.5 * special.erf((np.log(x)-self.mu)/(np.sqrt(2)*self.sigma))
+        c = (0.5 + 0.5 * special.erf((np.log(x)-self.mu)/(np.sqrt(2)*self.sigma)))
+        return self.scale * c
+
+    def inv(self, c):
+        c /= self.scale
+        return np.exp(np.sqrt(2)*self.sigma*special.erfinv((c-0.5)/0.5)+self.mu)
 
 
-class GradingCurve(object):
+class GrainSizeDistribution(object):
 
     EPSILON = 1.e-5
 
@@ -92,8 +178,8 @@ class GradingCurve(object):
         "Kru": [2**(-phi) for phi in range(10, -9, -1)]
     }
 
-    def __init__(self, sieves, **kwargs):
-        """Initializes a GradingCurve instance.
+    def __init__(self, sieves, residue=None, **kwargs):
+        """Initializes a GrainSizeDistribution instance.
 
         Parameters
         ----------
@@ -111,66 +197,82 @@ class GradingCurve(object):
         """
         self._s = np.array(sieves, dtype=np.float64)
         assert self._s[0] > 0.0, 'The smallest sieve must be greater than 0.0'
-        self._v = kwargs.get("volume", 1.0)
+
+        dtype = kwargs.get('dtype', np.float64)
 
         keys = kwargs.keys()
-        if 'passage' in keys:
-            a = self.__normalize(np.array(kwargs['passage']), cum=True)
-            self._f = [a[i+1]-a[i] for i in range(len(a)-1)]
-        elif 'residue' in keys:
-            self._f = self.__normalize(np.array(kwargs['residue']))
+        if residue is not None:
+            f = residue
+        elif 'passage' in keys:
+            a = kwargs['passage']
+            f = [a[i+1]-a[i] for i in range(len(a)-1)]
         elif 'sizes' and 'volume_func' in keys:
-            a = self.__classify(self._s, np.array(kwargs['sizes']), kwargs['volume_func'])
-            self._v = np.sum(a)
-            self._f = self.__normalize(a)
+            f = self.__classify(self._s, np.array(kwargs['sizes']), kwargs['volume_func'])
         elif 'solids' in keys:
-            a = self.__classify(self._s, kwargs['solids'], volume_func=lambda solid: solid.volume, size_func=lambda solid: solid.equivalent_mesh_size)
-            self._v = np.sum(a)
-            self._f = self.__normalize(a)
+            f = self.__classify(self._s, kwargs['solids'], volume_func=lambda solid: solid.volume, size_func=lambda solid: solid.equivalent_mesh_size)
         elif 'mu' and 'sigma' in keys:
-            a = self.__generate(self._s, kwargs['mu'], kwargs['sigma'], kwargs.get('distr', 'lognorm'))
-            self._f = self.__normalize(a)
+            f = self.__generate(self._s, kwargs['mu'], kwargs['sigma'], kwargs.get('dist', 'lognorm'))
         else:
             raise ValueError('Unexpected kwargs: {}'.format(kwargs.keys()))
 
-        f_sum = sum(self._f)
-        sum_check = abs(1.0 - f_sum) < self.EPSILON or f_sum < self.EPSILON
+        self._f = np.array(f, dtype=dtype)
+
         len_check = len(self._s) - 1 == len(self._f)
-        assert sum_check, 'sum(f) must be either 1.0 or 0.0, not {:.3f}'.format(f_sum)
         assert len_check, '{:d} - 1 != {:d}'.format(len(self._s), len(self._f))
 
     def __add__(self, other):
-        if not isinstance(other, GradingCurve):
+        if not isinstance(other, GrainSizeDistribution):
             raise NotImplemented
 
         if not np.array_equal(self._s, other._s):
             raise ValueError("GradingCurves must have equal sieves")
 
         s = copy.copy(self)
-        s._f = self.__normalize(self._f + other._v/s._v * other._f)
-        s._v += other._v
+        s._f += other._f
         return s
 
     def __iadd__(self, other):
-        if not isinstance(other, GradingCurve):
+        if not isinstance(other, GrainSizeDistribution):
             raise NotImplemented
 
         if not np.array_equal(self._s, other._s):
             raise ValueError("GradingCurves must have equal sieves")
 
-        self._f = self.__normalize(self._f + other._v/self._v * other._f)
-        self._v += other._v
+        self._f += other._f
+        return self
+
+    def __sub__(self, other):
+        if not isinstance(other, GrainSizeDistribution):
+            raise NotImplemented
+
+        if not np.array_equal(self._s, other._s):
+            raise ValueError("GradingCurves must have equal sieves")
+
+        s = copy.copy(self)
+        s._f -= other._f
+        return s
+
+    def __isub__(self, other):
+        if not isinstance(other, GrainSizeDistribution):
+            raise NotImplemented
+
+        if not np.array_equal(self._s, other._s):
+            raise ValueError("GradingCurves must have equal sieves")
+
+        self._f -= other._f
+        return self
 
     def __mul__(self, scalar):
         s = copy.copy(self)
-        s._v *= float(scalar)
+        s._f *= float(scalar)
         return s
 
     def __rmul__(self, scalar):
         return self * float(scalar)
 
     def __imul__(self, scalar):
-        self._v *= float(scalar)
+        self._f *= float(scalar)
+        return self
 
     def __classify(self, sieves, items, volume_func, size_func=lambda item: item):
         """Performs size classification of the particles given by ``items`` into
@@ -209,21 +311,12 @@ class GradingCurve(object):
         log_interp = lambda z: np.exp(lin_interp(np.log(z)))
         return log_interp
 
-    def __generate(self, sieves, mu, sigma, distr='lognorm'):
-        x = self.__fraction_sizes(sieves)
-        if distr == 'lognorm':
-            return Lognormal(mu, sigma).pdf(x)
-        elif distr == 'norm':
-            return stats.norm.pdf(x, mu, sigma)
+    def __generate(self, sieves, mu, sigma, dist='lognorm'):
+        if dist == 'lognorm':
+            gen = Lognormal(mu, sigma)
+            return [gen.cdf(sieves[i+1])-gen.cdf(sieves[i]) for i in range(len(sieves)-1)]
         else:
-            raise ValueError('Unexpected distribution type: {}'.format(distr))
-
-    def __normalize(self, f, cum=False):
-        if cum:
-            fabs = f[-1]-f[0]
-            return np.array([(fi-f[0])/fabs for fi in f])
-        total = np.sum(f)
-        return np.array([fi/total for fi in f])
+            raise ValueError('Unexpected distribution type: {}'.format(dist))
 
     @property
     def num_sieves(self):
@@ -238,10 +331,10 @@ class GradingCurve(object):
         return self._s
 
     @property
-    def volume(self):
-        return self._v
+    def total(self):
+        return np.sum(self._f)
 
-    def dc(self, c, interp='linear'):
+    def dc(self, c, interp='log'):
         """Returns the characteristic particle sizes with cum. fraction content
         specified by ``c``, e.g. d50 (c=0.5).
 
@@ -270,7 +363,7 @@ class GradingCurve(object):
 
     @property
     def dmax(self):
-        return self.di[np.where(self.fc >= 1.0)[0][0]]
+        return self.di[np.where(self.fc >= self.total)[0][0]]
 
     @property
     def di(self):
@@ -294,7 +387,7 @@ class GradingCurve(object):
     def mean(self):
         """Arithmetic mean particle size.
         """
-        return np.sum(self.di * self.fi)
+        return np.sum(self.di * self.fi) / self.total
 
     @property
     def sd(self):
@@ -306,13 +399,15 @@ class GradingCurve(object):
     def gm(self):
         """Geometric mean particle size.
         """
-        return np.prod(self.di**self.fi)
+        #return np.prod(self.di**self.fi)**(1/self.total)
+        return np.exp(np.sum(self.fi * np.log(self.di)) / self.total)
 
     @property
     def gsd(self):
         """Geometric standard deviation of size distribution.
         """
-        return np.exp(np.sqrt(np.sum(self.fi * np.log(self.di/self.gm)**2)))
+        #return np.exp(np.sqrt(np.sum(self.fi * np.log(self.di/self.gm)**2)))
+        return np.exp(np.sqrt(np.sum(self.fi * np.log(self.di/self.gm)**2)/self.total))
 
     @classmethod
     def __load(cls, f, dialect, **kwargs):
@@ -337,7 +432,7 @@ class GradingCurve(object):
 
     @classmethod
     def load(cls, f, dialect='excel', **kwargs):
-        """Loads a GradingCurve from a csv file.
+        """Loads a GrainSizeDistribution from a csv file.
 
         Parameters
         ----------
@@ -368,26 +463,35 @@ class GradingCurve(object):
         else:
             self.__save(f, dialect, **kwargs)
 
-    def plot(self, fig=None, axi=None, axc=None):
-        if not axi or not axc:
+    def plot(self, fig=None, axi=None, axc=None, logx=True, normalize=False):
+        if fig is None:
+            import matplotlib.pyplot as plt
+            fig = plt.figure()
+        if not axi:
             axi = fig.add_subplot(211)
-            axc = fig.add_subplot(212, sharex=axt)
+        if not axc:
+            axc = fig.add_subplot(212)
 
         Di = self.di
-        Fi = self.fi
+        Fi = self.fi if not normalize else self.fi/self.total
         Ds = self.sieves
-        Fc = self.fc
+        Fc = self.fc if not normalize else self.fc/self.total
         gm = self.gm
         label = "GM={:.3f}, GSD={:.3f}".format(gm, self.gsd)
 
-        axi.step(Di, Fi, where='mid')
+        axi.bar(np.arange(self.num_fractions), Fi)
         axi.set_ylabel('Fraction finer [-]')
-        axi.set_xscale('log', basex=2)
 
         p = axc.plot(Ds, Fc, '-')
         axc.axvline(gm, linestyle='--', color=p[0].get_color(), label=label)
         axc.set_ylabel('Cum. fraction finer [-]')
-        axc.set_xlabel('Particle size [m]')
-        axc.set_xscale('log', basex=2)
+        axc.set_xlabel('Grain size')
+
+        if logx:
+            axc.set_xscale('log', basex=2)
 
         return axi, axc
+
+    def to_psd(self, volume_func, cast_func=int):
+        n = [cast_func(f / volume_func(d)) for d, f in zip(self.di, self.fi)]
+        return GrainSizeDistribution(self.sieves, n, dtype=np.uint64)

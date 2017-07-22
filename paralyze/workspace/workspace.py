@@ -1,21 +1,24 @@
+"""Module documentation goes here ...
+
+"""
+from jinja2 import meta
+from paralyze.utils import Configuration, NestedDict
+from .remote import RemoteFileSystemLoader
+
 import os
-import json
 import logging
 import sys
 import shutil
-import importlib
-import argparse
+import importlib.util
 import socket
 import getpass
 import jinja2
 import paramiko
+import paralyze
+import posixpath
+import tempfile
+import json
 
-from jinja2 import meta
-
-from .rdict import rdict
-from .cli_ext import type_cast
-from .json_ext import ParalyzeJSONDecoder, ParalyzeJSONEncoder
-from .remote import RemoteFileSystemLoader
 
 logger = logging.getLogger(__name__)
 
@@ -24,20 +27,58 @@ if not os.path.exists(os.path.expanduser('~/.paralyze')):
         os.mkdir(os.path.expanduser('~/.paralyze'))
         SSH_LOG_FILE = os.path.expanduser('~/.paralyze/ssh_log.txt')
         SSH_CON_FILE = os.path.expanduser('~/.paralyze/ssh_conn.txt')
-    except IOError:
+    except OSError:
         SSH_LOG_FILE = ""
         SSH_CON_FILE = ""
 else:
     SSH_LOG_FILE = os.path.expanduser('~/.paralyze/ssh_log.txt')
     SSH_CON_FILE = os.path.expanduser('~/.paralyze/ssh_conn.txt')
 
-SETTINGS_DIR = ".paralyze"
-SETTINGS_FILE = "workspace.json"
+CONFIG_DIR = ".paralyze"
+CONFIG_FILE = "config.json"
 
-LOG_FILE = "log.txt"
-LOG_FILE_FORMAT = "[%(asctime)-15s][%(levelname)-7s] %(message)s"
+DEFAULT_CONFIG = {
+    "__version__": "",
 
-VERSION_KEY = "__version__"
+    "template": {
+        "environment": {
+            "block_start_string": "{%",
+            "block_end_string": "%}",
+            "variable_start_string": "{{",
+            "variable_end_string": "}}",
+            "comment_start_string": "{#",
+            "comment_end_string": "#}",
+            "line_statement_prefix": "",
+            "line_comment_prefix": "",
+            "trim_blocks": False,
+            "lstrip_blocks": False,
+            "newline_sequence": "\n",
+            "keep_trailing_newline": False,
+            "extensions": "",
+            "optimized": True,
+            "autoescape": True,
+            "cache_size": 400,
+            "auto_reload": True,
+            "enable_async": True
+        },
+
+        "loader": {
+            "dirs": [],
+            "follow_links": True,
+            "encoding": "utf-8"
+        },
+
+        "context_extension_dirs": []
+    },
+
+    "parameter_module": "",
+
+    "logging": {
+        "level": "WARNING",
+        "file": "log.txt",
+        "file_format": "[%(asctime)-15s][%(levelname)-7s] %(message)s"
+    }
+}
 
 
 class Workspace(object):
@@ -45,230 +86,257 @@ class Workspace(object):
     """
 
     def __init__(self, *args, **kwargs):
-        """Create new workspace or load existing (remote) workspace settings.
+        """Create new workspace and load existing (remote) workspace configuration.
         """
-        self._builtin_template_vars = set([name for name in __builtins__ if not name.startswith('_')])
-        self._extensions = {}
-        self._temp_dir = ''
-        self._template_env = None
+        self._builtin_names = set([name for name in __builtins__ if not name.startswith('_')])
+        self.extensions = dict()
+        self.temp_dir = None
+        self.env = None
+        self.config = dict()
+        self.parameters = dict()
 
-        # try to parse arguments from command line if they where not provided
-        # explicitly
-        if len(args) + len(kwargs) == 0:
-            kwargs = self._parse_args()
-        elif len(args) == 1:
-            kwargs['path'] = args[0]
+        if len(args) == 1:
+            kwargs['path'] = str(args[0])
 
-        # create SSH connection if required
-        self._conn, self._sftp = self._init_ssh_connection(**kwargs)
+        # create SSH and SFTP connection if required
+        if kwargs.get('connection') or kwargs.get('host'):
+            self._conn, self._sftp = self._init_ssh_connection(**kwargs)
+        else:
+            self._conn = None
+            self._sftp = None
 
         # check if workspace root folder exists
         cwd = self._sftp.getcwd() if self.is_remote() else os.getcwd()
         path = kwargs.get('path', cwd)
         if not self.path_exists(path):
-            raise OSError('No such file or directory "{}"'.format(path))
+            raise OSError('no such file or directory: {}'.format(path))
+
+        # IMPORTANT: root directory is set here!
         self._root = path
 
-        # check if settings file exists, probably create one if not
-        if not self.path_exists(self.settings_file_path):
+        # check if settings file exists, try to create one if not
+        if not self.path_exists(self.config_file_path):
             if kwargs.get('auto_create', False):
-                self._create(kwargs.get('settings', {}))
+                self._create(kwargs.get('config', None))
             else:
-                raise OSError('Directory "{}" is not a paralyze workspace'.format(self.root))
+                raise OSError('"{}" is not a paralyze workspace directory'.format(self.root_dir))
 
-        # load settings dict (with variables as raw template strings)
-        self._raw = self._load()
-        # init main logger
-        self._init_logger(kwargs.get('logger', None))
-        # check workspace and code version compatibility
-        self._check_version()
+        self._init()
 
     def __del__(self):
+        """Clean-up ssh connection and temporary folder.
+        """
         if self.is_remote():
             self._conn.close()
 
-        if self._temp_dir != '':
-            shutil.rmtree(self._temp_dir)
-
-    # ==============
-    # DICT INTERFACE
-    # ==============
-
-    def __contains__(self, item):
-        return item in self._raw
-
-    def __getitem__(self, key):
-        return self.get(key)
-
-    def __setitem__(self, key, value):
-        self._raw[key] = value
-
-    def get(self, key, default=None, raw=False):
-        if raw:
-            return self._raw.get_raw(key, default)
-        else:
-            return self._raw.get(key, default)
-
-    @property
-    def keys(self):
-        return [key for key in self._raw.keys() if not key.startswith('__')]
-
-    def pop(self, key):
-        return self._raw.pop(key)
-
-    @property
-    def settings(self):
-        settings = {}
-        for key in self.keys:
-            settings[key] = self.get(key)
-        return settings
-
-    def update(self, settings):
-        self._raw.update(settings)
+        if self.temp_dir:
+            shutil.rmtree(self.temp_dir)
 
     @property
     def version(self):
-        return self._raw[VERSION_KEY]
+        return self.config['__version__']
 
-    # ========================
-    # WORKSPACE INITIALIZATION
-    # ========================
-
-    def init_vars(self, args=None):
-        """Initializes workspace and template variables
-
-        Returns
-        -------
-        remaining_args: list
-            List of all args that have not been used during this initialization.
+    @property
+    def root_dir(self):
+        """Returns the root directory of the workspace instance.
         """
-        args = args or sys.argv
-        # init workspace variables first because template or extension settings
-        # might depend on workspace variables
-        remaining_args = self._init_workspace_variables(args)
-        # init custom constext extensions
-        self._extension_dirs = self._load_context_extensions()
-        # init template environment before first template access
-        self._template_env  = self._get_template_env()
-        remaining_args = self._init_template_variables(remaining_args)
-        return remaining_args
+        return self._root
 
-    def _parse_args(self):
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            '--create_workspace',
-            action='store_true',
-            default=False,
-            help="create a new workspace at the current work directory"
-        )
-        parser.add_argument(
-            '--path',
-            type=str,
-            default='.'
-        )
-        parser.add_argument(
-            '--host',
-            type=str,
-            default=''
-        )
-        parser.add_argument(
-            '--username',
-            type=str,
-            default=''
-        )
-        parser.add_argument(
-            '--password',
-            type=str,
-            default=''
-        )
-        args, custom_args = parser.parse_known_args()
-        return vars(args)
-
-    def _create(self, settings=None):
-        """Creates a new settings file.
+    @property
+    def config_dir(self):
+        """Returns the absolute path to the workspace settings folder.
         """
-        # create hidden settings folder
-        if not self.path_exists(self.settings_dir):
-            logger.info('creating paralyze workspace at {}'.format(self.root))
-            self.mkdir(settings_dir)
-        # set paralyze version
-        settings[VERSION_KEY] = VERSION
-        settings.pop("root_path")
-        # save settings to json file
-        with self.open(self.settings_file_path, 'w') as settings_file:
-            logger.debug('saving paralyze workspace settings to file {}'.format(self.settings_file_path))
-            json.dump(settings or {}, settings_file, indent=4, sort_keys=True, cls=ParalyzeJSONEncoder)
+        return self.abs_path(CONFIG_DIR)
 
-    def _load(self):
-        with self.open(self.settings_file_path, 'r') as settings:
-            data = json.load(settings, cls=ParalyzeJSONDecoder)
-        data["root_path"] = self.root
-        return rdict(data)
+    @property
+    def config_file_path(self):
+        """Returns the absolute path to the main workspace settings file.
+        """
+        return self.abs_path(self.config_dir, CONFIG_FILE)
+
+    def get(self, key, default=None):
+        return self.config.get(key, default)
+
+    def get_abs_path(self, key, mapping=None):
+        mapping = mapping or self.config
+        return self.abs_path(mapping[key])
+
+    # ==============
+    # INITIALIZATION
+    # ==============
+
+    def _init(self):
+        self.config = NestedDict(json.load(open(self.config_file_path, 'r')))
+        self._validate_config()
+        # init main logger
+        self._init_logger()
+        # check workspace and code version compatibility
+        self._check_version()
+        # init jinja's template environment
+        self._init_template_env()
+        # init custom context extensions
+        self._init_context_extensions()
+        # init parameter Python module
+        self._init_parameter_module()
+
+    def _validate_config(self):
+        # TODO: Implement nested dict key validation
+        pass
+
+    def _init_logger(self):
+        logging_config = self.config['logging']
+        ll = logging_config['level']
+        lf = logging_config['file']
+        ff = logging_config['file_format']
+
+        fh = logging.FileHandler(lf)
+        fh.setFormatter(logging.Formatter(ff))
+        fh.setLevel(ll)
+
+        logger.addHandler(fh)
 
     def _check_version(self):
-        """TODO: Implement version comparison and policy.
-        """
-        wsp_version = self.version # workspace version
-        run_version = VERSION      # code version
+        """Checks code and workspace version compatibility.
 
-    def _init_workspace_variables(self, args):
-        """Initializes variables in the settings dict with values given in args.
+        """
+        # TODO: Implement version comparison and policy.
+        wsp_version = self.version          # workspace version
+        run_version = paralyze.__version__  # code version
+
+    def _init_template_env(self):
+        """Create and return a new jinja2 environment.
+
+        Jinja2 uses a central object called the template Environment. Instances
+        of this class are used to store the configuration and global objects,
+        and are used to load templates from the file system or remote locations.
+        """
+        config = self.config['template.loader'].copy()
+
+        if self.is_remote():
+            loader = RemoteFileSystemLoader(
+                self._sftp, config['dirs'], encoding=config['encoding'], follow_links=config['follow_links']
+            )
+        else:
+            loader = jinja2.FileSystemLoader(
+                config['dirs'], encoding=config['encoding'], followlinks=config['follow_links']
+            )
+
+        self.env = jinja2.Environment(loader=loader)
+
+    def _init_context_extensions(self):
+        """
+        """
+        self.extensions = {}
+        if self.is_remote():
+            self.extensions = self._init_remote_extensions()
+        else:
+            self.extensions = self._init_local_extensions()
+
+    def _init_local_extensions(self):
+        """Loads local context extensions.
+
+        extension_dir/__init__.py
+        extension_dir/my_extension.py
+        """
+        extensions = {}
+        for extension_dir in self.config['template.context_extension_dirs']:
+            abs_ext_dir = self.abs_path(extension_dir)
+            ext_init = self.abs_path(extension_dir, '__init__.py')
+            if self.path_exists(ext_init):
+                sys.path.append(self.root_dir)
+                mod = importlib.import_module(extension_dir)
+                for ext_key in mod.__all__:
+                    if ext_key in extensions.keys():
+                        logger.warn('duplicate extension "{}". Former extension will be replaced!'.format(ext_key))
+                    extensions[ext_key] = getattr(mod, ext_key)
+            else:
+                logger.warn('no __init__.py found in extension directory {}'.format(extension_dir))
+        return extensions
+
+    def _init_remote_extensions(self):
+        """
+        """
+        # TODO: Implement remote extension initialization.
+        return {}
+
+    def _init_parameter_module(self):
+        """Loads the workspace parameters Python module.
+
+        """
+        # TODO: Implement exception handling for parameter module initialization
+        if self.has_params():
+            spec = importlib.util.spec_from_file_location('workspace.parameters', self.get_abs_path('parameter_module'))
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            module.config['root_dir'] = self.root_dir
+            self.parameters = module.config
+        else:
+            self.parameters = dict()
+
+    def _create(self, config=None):
+        """Creates a new workspace configuration folder and file.
+        """
+        # create hidden configuration folder
+        if not self.path_exists(self.config_dir):
+            logger.info('creating paralyze workspace at {}'.format(self.root_dir))
+            self.mkdir(self.config_dir)
+        # set paralyze version
+        config = config or DEFAULT_CONFIG
+        config['__version__'] = paralyze.__version__
+        with self.open(self.config_file_path, 'w') as config_file:
+            logger.debug('saving paralyze workspace config to file {}'.format(self.config_file_path))
+            json.dump(config, config_file, indent='\t', sort_keys=True)
+
+    # ==============
+    # PARAMETERS
+    # ==============
+
+    def has_params(self):
+        if self.config['parameter_module'] != '':
+            if os.path.exists(self.get_abs_path('parameter_module')):
+                return True
+        return False
+
+    def init_params(self, **kwargs):
+        """Initializes parameter configuration and template variables.
 
         Parameters
         ----------
-        args: dict or list
-            A dict with variable names as keys or a list of command line
-            arguments.
+        kwargs:
 
-        Returns
-        -------
-        custom_args: dict or list
-            The list of unused command line arguments if args is a list or an
-            empty list if args is a dict.
+
         """
-        # init variables from dict
-        if isinstance(args, dict):
-            self.update(args)
-            return []
+        if not self.has_params():
+            logger.warn('you tried to initialize workspace parameters without an existing or valid parameters module')
+            return
 
-        # init variables from argument list
-        parser = argparse.ArgumentParser()
-        # add workspace variables as required command line arguments
-        for var in self.get_workspace_variables():
-            parser.add_argument('--%s' % var, required=True, type=type_cast)
-        wsp_args, unknown_args = parser.parse_known_args(args or sys.argv)
-        # update workspace settings directly with command line values
-        self.update(vars(wsp_args))
-        return unknown_args
+        pro = NestedDict(kwargs)  # provided args
+        pro_args = set(pro.keys())
+        req = NestedDict(self.parameters)  # required args
+        req_args = set(req.keys())
 
-    def _init_logger(self, main_logger=None):
-        log_level = self.get('log_level', logging.DEBUG)
-        log_format = self.get('log_format', LOG_FILE_FORMAT)
+        missing = req_args - pro_args
+        if len(missing):
+            raise KeyError('missing parameters: {!s}'.format(missing))
 
-        file_handler = logging.FileHandler(self.log_file_path)
-        file_handler.setFormatter(logging.Formatter(log_format))
-        file_handler.setLevel(log_level)
-
-        if main_logger:
-            main_logger.addHandler(file_handler)
-        logger.addHandler(file_handler)
+        config = Configuration(self.parameters, **self.config['template.environment'])
+        self.parameters = NestedDict(config.render(**dict(zip(req_args, pro[req_args]))))
 
     # =======================
     # SSH/SFTP INITIALIZATION
     # =======================
 
     def _load_host_key(self, host):
-        hostkeytype = None
+        knownhosts = os.path.expanduser('~/.ssh/known_hosts')
         hostkey = None
         try:
-            host_keys = paramiko.util.load_host_keys(os.path.expanduser('~/.ssh/known_hosts'))
+            host_keys = paramiko.util.load_host_keys(knownhosts)
         except IOError:
             try:
                 # try ~/ssh/ too, because windows can't have a folder named ~/.ssh/
-                host_keys = paramiko.util.load_host_keys(os.path.expanduser('~/ssh/known_hosts'))
+                host_keys = paramiko.util.load_host_keys(knownhosts)
             except IOError:
                 raise OSError('Unable to open ssh host keys file')
-                host_keys = {}
 
         if host in host_keys:
             hostkeytype = host_keys[host].keys()[0]
@@ -277,32 +345,38 @@ class Workspace(object):
         return hostkey
 
     def _init_ssh_connection(self, **kwargs):
-        if kwargs.get("connection", False):
+        if kwargs.get('connection', False):
             # TODO: load connection details from file!
             host = ""
             username = ""
             password = ""
             port = 22
-        elif kwargs.get("host", False):
-            host = kwargs.get("host")
-            username = kwargs.get("username")
-            password = getpass.getpass("Password ({}): ".format(host))
-            port = kwargs.get("port", 22)
-            gss_auth = kwargs.get("gss_auth", False)
-            gss_kex = kwargs.get("gss_key", False)
+        elif kwargs.get('host', False):
+            host = kwargs.get('host')
+            username = kwargs.get('username')
+            password = getpass.getpass('Password ({}): '.format(host))
+            port = kwargs.get('port', 22)
+            gss_auth = kwargs.get('gss_auth', False)
+            gss_kex = kwargs.get('gss_key', False)
         else:
-            return None, None
+            raise KeyError('either connection name of connection details (host, username, etc.) must be specified')
 
         paramiko.util.log_to_file(SSH_LOG_FILE, level=logging.DEBUG)
-
         hostkey = self._load_host_key(host)
 
         try:
             conn = paramiko.Transport((host, port))
-            conn.connect(hostkey, username, password, gss_host=socket.getfqdn(host), gss_auth=gss_auth, gss_kex=gss_kex)
+            conn.connect(
+                hostkey,
+                username,
+                password,
+                gss_host=socket.getfqdn(host),
+                gss_auth=gss_auth,
+                gss_kex=gss_kex
+            )
             sftp = paramiko.SFTPClient.from_transport(conn)
         except paramiko.SSHException as e:
-            raise OSError('Could not connect to remote server {}: {}'.format(host, e.args[0]))
+            raise OSError('could not connect to remote server {}: {}'.format(host, e.args[0]))
 
         return conn, sftp
 
@@ -310,31 +384,15 @@ class Workspace(object):
     # FILESYSTEM RELATED STUFF
     # ========================
 
-    @property
-    def root(self):
-        return self._root
-
-    @property
-    def settings_dir(self):
-        return self.abs_path(SETTINGS_DIR)
-
-    @property
-    def settings_file_path(self):
-        return self.abs_path(SETTINGS_DIR, SETTINGS_FILE)
-
-    @property
-    def log_file_path(self):
-        return self.abs_path(self.get("__log_file__", LOG_FILE))
-
     def rel_path(self, arg):
         if self.is_remote():
-            return posixpath.relpath(arg, self.root)
-        return os.path.relpath(arg, self.root)
+            return posixpath.relpath(arg, self.root_dir)
+        return os.path.relpath(arg, self.root_dir)
 
     def abs_path(self, *args):
         if self.is_remote():
-            return posixpath.join(self.root, *args)
-        return os.path.join(self.root, *args)
+            return posixpath.join(self.root_dir, *args)
+        return os.path.join(self.root_dir, *args)
 
     def is_abs_path(self, path):
         if self.is_remote():
@@ -356,14 +414,15 @@ class Workspace(object):
             os.mkdir(folder)
 
     def open(self, file_path, mode='r', encoding='utf-8'):
-        """Opens the file specified by `file_path` in the given `mode`.
+        """Opens the file specified by ``file_path`` in the given ``mode``.
+
         If workspace is remote, the remote file is copied to a local
-        temporary folder first and then openend from there.
+        temporary folder first and then opened from there.
 
         Parameters
         ----------
         file_path: str
-            Path to file to be openend.
+            Path to file to be opened.
         mode: str
             Any valid open mode, e.g. 'r', 'w', 'w+', ...
         encoding: str
@@ -371,18 +430,18 @@ class Workspace(object):
 
         Raises
         ------
-        OSError: In case file does not exist.
+        OSError: If file does not exist.
         """
         if not self.is_abs_path(file_path):
             file_path = self.abs_path(file_path)
-
         # file_path is absolute from here on!
-        if not self.path_exists(file_path):
-            raise OSError("No such file or directory: {}".format(file_path))
+
+        if not mode.startswith('w') and not self.path_exists(file_path):
+            raise OSError('no such file or directory: {}'.format(file_path))
 
         if self.is_remote():
             # copy remote file to temp dir and open it from there
-            open_path = self._temp_file_path(file_path)
+            open_path = self._create_temp_file_path(file_path)
             self._sftp.get(file_path, open_path)
         else:
             open_path = file_path
@@ -398,68 +457,65 @@ class Workspace(object):
                 return False
         return os.path.exists(path)
 
-    def _temp_file_path(self, file_path):
+    def _create_temp_file_path(self, file_path):
         """Returns a path to a new temporary file.
         """
-        if self._temp_dir is None:
-            self._temp_dir = tempfile.makedtemp(prefix='paralyze')
+        if self.temp_dir is None:
+            self.temp_dir = tempfile.mkdtemp(prefix='paralyze')
         # TODO: Create unique file names!
-        return os.path.join(self._temp_dir, os.path.basename(file_path))
+        return os.path.join(self.temp_dir, os.path.basename(file_path))
 
     # ======================
-    # TEMPLATE RELATED STUFF
+    # PARAMETER FRAMEWORK
     # ======================
 
     def get_context(self):
-        context = self.get_settings()
+        """Returns the template context (setting + extensions).
+        """
+        context = self.config
         context.update(self.get_context_extensions())
         return context
 
     def get_context_extensions(self):
-        return self._extensions
+        return self.extensions
 
-    def get_variables(self):
-        return self.get_workspace_variables() + self.get_template_variables()
+    def get_undefined(self, templates=()):
+        pars = self.get_module_parameters() | self.get_template_variables(templates)
+        keys = self.parameters.keys()
+        return pars - keys
 
-    def get_workspace_variables(self):
-        return self._raw.vars()
+    def get_module_parameters(self):
+        return Configuration(self.parameters, **self.config['template.environment']).variables()
 
-    def get_template_variables(self):
-        template_vars = set([])
-        for template_key in self.get("templates", {}).keys():
-            var = self._get_template_variables(template_key)
-            template_vars.update(var)
-        # remove builtin names
-        template_vars = template_vars - self._builtin_template_vars
-        return template_vars
-
-    def render_template_file(self, template_key, custom_context=None):
-        """
-
-        Parameters
-        ----------
-        template_key: str
-            The name of the template.
-        """
-        # load template file
-        template = self._get_template(template_key)
-
-        try:
-            context = self.get_context()
-            if isinstance(custom_context, dict):
-                context.update(custom_context)
-            return template.render(**context)
-        except TypeError as e:
-            logger.error('error during rendering of template file "{}": {}'.format(template_key, e.args[0]))
-            return ""
-
-    def _get_template_variables(self, template_key):
-        """Recursively parse undeclared variables in template file and all
+    def get_template_variables(self, templates):
+        """Recursively parses undeclared variables in all template files and
         referenced files.
 
         Parameters
         ----------
-        filename: str
+        templates: list-of-str
+            names of template files
+
+        Returns
+        -------
+        template_vars: set
+            set of template variables as strings
+        """
+        template_vars = set([])
+        for template in templates:
+            var = self._get_template_variables(template)
+            template_vars.update(var)
+        # remove builtin names
+        template_vars = template_vars - self._builtin_names
+        return template_vars
+
+    def _get_template_variables(self, template):
+        """Recursively parses undeclared variables in template file and all
+        referenced files.
+
+        Parameters
+        ----------
+        template: str
             name of template file
 
         Returns
@@ -467,13 +523,13 @@ class Workspace(object):
         template_vars: set
             set of template variables as strings
         """
-        template = self._get_template_source(template_key)
+        template = self.get_template_source(template)[0]
 
         try:
-            template_ast = self._template_env.parse(template)
+            template_ast = self.env.parse(template)
         except jinja2.TemplateSyntaxError as e:
-            logger.error('error while parsing template file "{}": {} (line: {})'.format(template_file, e.message, e.lineno))
-            sys.exit(1)
+            logger.error('error while parsing template file "{}": {} (line: {})'.format(template, e.message, e.lineno))
+            return set()
 
         template_vars = meta.find_undeclared_variables(template_ast)
 
@@ -482,70 +538,39 @@ class Workspace(object):
 
         return template_vars
 
-    def _get_template_source(self, key):
-        if key in self.get("templates", []):
-            key = self.get("templates")[key]
-        return self._template_env.loader.get_source(self._template_env, key)[0]
-
-    def _get_template(self, key):
-        if key in self.get("templates", []):
-            key = self.get("templates")[key]
-        return self._template_env.get_template(key)
-
-    def _get_template_env(self):
-        if self.is_remote():
-            loader = RemoteFileSystemLoader(self._sftp, self.get("template_dirs", []))
-        else:
-            loader = jinja2.FileSystemLoader(self.get("template_dirs", []))
-
-        return jinja2.Environment(loader=loader)
-
-    def _init_template_variables(self, args):
-
-        existing_names = set(self.keys())
-        existing_names.update(set(self.get_context_extensions().keys()))
-
-        template_vars = self.get_template_variables() - existing_names
-
-        if not len(template_vars):
-            return []
-
-        parser = argparse.ArgumentParser()
-        # parse all variables as strings first
-        for var in template_vars:
-            parser.add_argument('--%s' % var, required=True, type=type_cast)
-        # parse template args from command line
-        template_args, unknown_args = parser.parse_known_args(args)
-        # and add them to the context
-        self.update(vars(template_args))
-        return unknown_args
-
-    def _load_context_extensions(self):
+    def render_template(self, template, custom_context=None):
         """
-        """
-        self._extensions = {}
-        if self.is_remote():
-            self._extensions = self._load_remote_extensions()
-        else:
-            self._extensions = self._load_local_extensions()
 
-    def _load_local_extensions(self):
-        extensions = {}
-        for extension_dir in self.get("context_extension_dirs", []):
-            abs_ext_dir = self.abs_path(extension_dir)
-            ext_init = self.abs_path(extension_dir, "__init__.py")
-            if self.path_exists(ext_init):
-                sys.path.append(self.root)
-                mod = importlib.import_module(extension_dir)
-                for ext_key in mod.__all__:
-                    if ext_key in extensions.keys():
-                        logger.warn('duplicate extension "{}". Former extension will be replaced!'.format(ext_key))
-                    extensions[ext_key] = getattr(mod, ext_key)
-            else:
-                logger.warn('No __init__.py found in extension directory {}'.format(extension_dir))
-        return extensions
+        Parameters
+        ----------
+        template: str
+            The key of the template in the workspace configuration.
+        custom_context: mapping
 
-    def _load_remote_extensions(self):
-        """TODO: Implement.
         """
-        return {}
+        # load template file
+        template = self.get_template(template)
+
+        context = self.get_context()
+        context.update(custom_context or {})
+        return template.render(**context)
+
+    def get_template_source(self, template):
+        """Returns the (source, filename, uptodate) tuple of the specified template.
+
+        Parameters
+        ----------
+        template: str
+
+        """
+        return self.env.loader.get_source(self.env, template)
+
+    def get_template(self, template):
+        """Returns the specified template.
+
+        Parameters
+        ----------
+        template: str
+
+        """
+        return self.env.get_template(template)

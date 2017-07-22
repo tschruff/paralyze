@@ -309,8 +309,8 @@ class AABB(np.ndarray, Parsable):
     def update(self, **kwargs):
         """Update the corner coordinates.
         """
-        if "min" in kwargs:
-            self.min = Vector(kwargs["min"])
+        if 'min' in kwargs:
+            self.min = kwargs['min']
         else:
             if "x_min" in kwargs:
                 self.min.x = kwargs["x_min"]
@@ -319,8 +319,8 @@ class AABB(np.ndarray, Parsable):
             if "z_min" in kwargs:
                 self.min.z = kwargs["z_min"]
 
-        if "max" in kwargs:
-            self.max = Vector(kwargs["max"])
+        if 'max' in kwargs:
+            self.max = kwargs['max']
         else:
             if "x_max" in kwargs:
                 self.min.x = kwargs["x_max"]
