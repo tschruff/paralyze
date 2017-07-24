@@ -1,11 +1,11 @@
-from .config import Configuration
+from .config import ConfigDict
 from .curve_fitting import get_fitting_parameters
 from .distribution import Lognormal, GrainSizeDistribution
-from .mapping import NestedDict, iter_nested_mapping
+from .mapping import NestedDict
 
 __all__ = [
-    "Configuration",
+    "ConfigDict",
     "get_fitting_parameters",
     "Lognormal", "GrainSizeDistribution",
-    "NestedDict", "iter_nested_mapping"
+    "NestedDict"
 ]

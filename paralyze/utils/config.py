@@ -10,24 +10,7 @@ import re
 logger = logging.getLogger(__name__)
 
 
-class Template(object):
-
-    def __init__(self, string, var_start='{{', var_end='}}', level_sep=r'\.'):
-        self.template = str(string)
-        self.var_id = r'[a-zA-Z][a-zA-Z0-9_]*(' + level_sep + r'[_a-zA-Z0-9])*'  # \w+(\.\w+)*
-        self.pattern = re.compile(var_start + r'\s*(' + self.var_id + r')\s*' + var_end)
-
-    def variables(self):
-        return set([groups[0] for groups in self.pattern.findall(self.template)])
-
-    def substitute(self, **context):
-        return self.pattern.sub(lambda match: context[match.group(0)], self.template)
-
-    def safe_substitute(self, **context):
-        return self.pattern.sub(lambda match: context.get(match.group(0), match.group(0)), self.template)
-
-
-class Configuration(NestedDict):
+class ConfigDict(NestedDict):
 
     def __init__(self, mapping, **kwargs):
         """
@@ -40,23 +23,64 @@ class Configuration(NestedDict):
         kwargs:
 
         """
-        NestedDict.__init__(self, mapping, kwargs.get('level_sep', ' '))
+        NestedDict.__init__(self, mapping, kwargs.get('level_sep', '.'))
         self.var_start = kwargs.get('var_start', '{{')
         self.var_end = kwargs.get('var_end', '}}')
         self.buffer = None
-        self.buffer = self._prepare()
+        self.buffer = self._simplify()
 
-    def create_template(self, item):
-        return Template(item, self.var_start, self.var_end, self.level_separator())
+    def render(self, **kwargs):
+        """Renders all template items given the values specified in kwargs.
 
-    def render_context(self, **kwargs):
+        Parameters
+        ----------
+        kwargs
+
+        Returns
+        -------
+
+        """
+        return self._render_all(self.buffer.copy(), self._render_context(**kwargs))
+
+    def variables(self):
+        variables = set([])
+        for k, v in self.items():
+            if not isinstance(v, str):
+                continue
+            variables |= self._create_template(v).variables()
+        return variables - set(self.keys())
+
+    def _create_template(self, item):
+
+        class Template(object):
+            pattern = r'{start}\s*(?P<var>{id})\s*{end}'.format(
+                start=re.escape(self.var_start),
+                id=r'[a-zA-Z][a-zA-Z0-9_]*(?:'+re.escape(self.level_separator())+r'[a-zA-Z][_a-zA-Z0-9]*)*',
+                end=re.escape(self.var_end)
+            )
+
+            def __init__(self, template):
+                self.template = template
+                self.pattern = re.compile(Template.pattern)
+
+            def variables(self):
+                return set([var for var in self.pattern.findall(self.template)])
+
+            def substitute(self, **context):
+                return self.pattern.sub(lambda mo: str(context[mo.group('var')]), self.template)
+
+            def safe_substitute(self, **context):
+                def safe_get(mo):
+                    return str(context.get(mo.group('var'), mo.group(0)))
+                return self.pattern.sub(safe_get, self.template)
+
+        return Template(item)
+
+    def _render_context(self, **kwargs):
 
         class Context(abc.Mapping):
             def __init__(self, mapping):
                 self.__mapping = mapping
-
-            # def __getattr__(self, name):
-            #     return self[name]
 
             def __getitem__(self, key):
                 return self.__mapping[key]
@@ -75,39 +99,18 @@ class Configuration(NestedDict):
         context.update(kwargs)
         return Context(context)
 
-    def render(self, **kwargs):
-        """Renders all template items given the values specified in kwargs.
+    def _simplify(self):
+        return self._render_all(self.copy(), self._render_context(), True)
 
-        Parameters
-        ----------
-        kwargs
-
-        Returns
-        -------
-
-        """
-        return self._render_all(self.buffer, self.render_context(**kwargs))
-
-    def variables(self):
-        variables = set([])
-        for k, v in self.items():
-            if not isinstance(v, str):
-                continue
-            variables |= self.create_template(v).variables()
-        return variables
-
-    def _prepare(self):
-        return self._render_all(self.copy(), self.render_context(), True)
-
-    def _render_all(self, mapping, context, prepare=False):
+    def _render_all(self, mapping, context, safe=False):
         for k, v in mapping.items():
             if isinstance(v, (list, tuple)):
-                mapping[k] = type(v)(map(lambda item: self._render_item(item, context, prepare), mapping[k]))
+                mapping[k] = type(v)(map(lambda item: self._render_item(item, context, safe), mapping[k]))
             else:
-                mapping[k] = self._render_item(v, context, prepare)
+                mapping[k] = self._render_item(v, context, safe)
         return mapping
 
-    def _render_item(self, item, context, prepare):
+    def _render_item(self, item, context, safe):
         """
 
         Parameters
@@ -121,6 +124,13 @@ class Configuration(NestedDict):
         if not isinstance(item, str):
             return item
 
-        if prepare:
-            return self.create_template(item).safe_substitute(**context)
-        return self.create_template(item).substitute(**context)
+        if safe:
+            old = item
+            while True:
+                new = self._create_template(old).safe_substitute(**context)
+                if new == old:
+                    break
+                else:
+                    old = new
+            return new
+        return self._create_template(item).substitute(**context)

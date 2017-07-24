@@ -1,19 +1,23 @@
 """Module documentation goes here ...
 
 """
+try:
+    import paramiko
+    HAS_PARAMIKO = True
+except ImportError:
+    HAS_PARAMIKO = False
+
 from jinja2 import meta
-from paralyze.utils import Configuration, NestedDict
+from paralyze.utils import ConfigDict, NestedDict
 from .remote import RemoteFileSystemLoader
 
 import os
 import logging
-import sys
 import shutil
 import importlib.util
 import socket
 import getpass
 import jinja2
-import paramiko
 import paralyze
 import posixpath
 import tempfile
@@ -100,7 +104,10 @@ class Workspace(object):
 
         # create SSH and SFTP connection if required
         if kwargs.get('connection') or kwargs.get('host'):
-            self._conn, self._sftp = self._init_ssh_connection(**kwargs)
+            if HAS_PARAMIKO:
+                self._conn, self._sftp = self._init_ssh_connection(**kwargs)
+            else:
+                raise ImportError('missing dependency: paramiko (install using "pip install paramiko")')
         else:
             self._conn = None
             self._sftp = None
@@ -114,10 +121,10 @@ class Workspace(object):
         # IMPORTANT: root directory is set here!
         self._root = path
 
-        # check if settings file exists, try to create one if not
+        # check if config file exists, try to create one if not
         if not self.path_exists(self.config_file_path):
             if kwargs.get('auto_create', False):
-                self._create(kwargs.get('config', None))
+                self._create(kwargs.get('config', DEFAULT_CONFIG))
             else:
                 raise OSError('"{}" is not a paralyze workspace directory'.format(self.root_dir))
 
@@ -221,7 +228,7 @@ class Workspace(object):
                 config['dirs'], encoding=config['encoding'], followlinks=config['follow_links']
             )
 
-        self.env = jinja2.Environment(loader=loader)
+        self.env = jinja2.Environment(loader=loader, **self.config['template.environment'])
 
     def _init_context_extensions(self):
         """
@@ -243,14 +250,13 @@ class Workspace(object):
             abs_ext_dir = self.abs_path(extension_dir)
             ext_init = self.abs_path(extension_dir, '__init__.py')
             if self.path_exists(ext_init):
-                sys.path.append(self.root_dir)
-                mod = importlib.import_module(extension_dir)
+                mod = importlib.import_module(abs_ext_dir)
                 for ext_key in mod.__all__:
                     if ext_key in extensions.keys():
-                        logger.warn('duplicate extension "{}". Former extension will be replaced!'.format(ext_key))
+                        logger.warning('duplicate extension "{}". Former extension will be replaced!'.format(ext_key))
                     extensions[ext_key] = getattr(mod, ext_key)
             else:
-                logger.warn('no __init__.py found in extension directory {}'.format(extension_dir))
+                logger.warning('no __init__.py found in extension directory {}'.format(extension_dir))
         return extensions
 
     def _init_remote_extensions(self):
@@ -266,14 +272,14 @@ class Workspace(object):
         # TODO: Implement exception handling for parameter module initialization
         if self.has_params():
             spec = importlib.util.spec_from_file_location('workspace.parameters', self.get_abs_path('parameter_module'))
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            module.config['root_dir'] = self.root_dir
-            self.parameters = module.config
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            mod.config['root_dir'] = self.root_dir
+            self.parameters = NestedDict(mod.config)
         else:
-            self.parameters = dict()
+            self.parameters = NestedDict(dict())
 
-    def _create(self, config=None):
+    def _create(self, config):
         """Creates a new workspace configuration folder and file.
         """
         # create hidden configuration folder
@@ -281,104 +287,10 @@ class Workspace(object):
             logger.info('creating paralyze workspace at {}'.format(self.root_dir))
             self.mkdir(self.config_dir)
         # set paralyze version
-        config = config or DEFAULT_CONFIG
         config['__version__'] = paralyze.__version__
         with self.open(self.config_file_path, 'w') as config_file:
-            logger.debug('saving paralyze workspace config to file {}'.format(self.config_file_path))
+            logger.info('saving paralyze workspace config to file {}'.format(self.config_file_path))
             json.dump(config, config_file, indent='\t', sort_keys=True)
-
-    # ==============
-    # PARAMETERS
-    # ==============
-
-    def has_params(self):
-        if self.config['parameter_module'] != '':
-            if os.path.exists(self.get_abs_path('parameter_module')):
-                return True
-        return False
-
-    def init_params(self, **kwargs):
-        """Initializes parameter configuration and template variables.
-
-        Parameters
-        ----------
-        kwargs:
-
-
-        """
-        if not self.has_params():
-            logger.warn('you tried to initialize workspace parameters without an existing or valid parameters module')
-            return
-
-        pro = NestedDict(kwargs)  # provided args
-        pro_args = set(pro.keys())
-        req = NestedDict(self.parameters)  # required args
-        req_args = set(req.keys())
-
-        missing = req_args - pro_args
-        if len(missing):
-            raise KeyError('missing parameters: {!s}'.format(missing))
-
-        config = Configuration(self.parameters, **self.config['template.environment'])
-        self.parameters = NestedDict(config.render(**dict(zip(req_args, pro[req_args]))))
-
-    # =======================
-    # SSH/SFTP INITIALIZATION
-    # =======================
-
-    def _load_host_key(self, host):
-        knownhosts = os.path.expanduser('~/.ssh/known_hosts')
-        hostkey = None
-        try:
-            host_keys = paramiko.util.load_host_keys(knownhosts)
-        except IOError:
-            try:
-                # try ~/ssh/ too, because windows can't have a folder named ~/.ssh/
-                host_keys = paramiko.util.load_host_keys(knownhosts)
-            except IOError:
-                raise OSError('Unable to open ssh host keys file')
-
-        if host in host_keys:
-            hostkeytype = host_keys[host].keys()[0]
-            hostkey = host_keys[host][hostkeytype]
-
-        return hostkey
-
-    def _init_ssh_connection(self, **kwargs):
-        if kwargs.get('connection', False):
-            # TODO: load connection details from file!
-            host = ""
-            username = ""
-            password = ""
-            port = 22
-        elif kwargs.get('host', False):
-            host = kwargs.get('host')
-            username = kwargs.get('username')
-            password = getpass.getpass('Password ({}): '.format(host))
-            port = kwargs.get('port', 22)
-            gss_auth = kwargs.get('gss_auth', False)
-            gss_kex = kwargs.get('gss_key', False)
-        else:
-            raise KeyError('either connection name of connection details (host, username, etc.) must be specified')
-
-        paramiko.util.log_to_file(SSH_LOG_FILE, level=logging.DEBUG)
-        hostkey = self._load_host_key(host)
-
-        try:
-            conn = paramiko.Transport((host, port))
-            conn.connect(
-                hostkey,
-                username,
-                password,
-                gss_host=socket.getfqdn(host),
-                gss_auth=gss_auth,
-                gss_kex=gss_kex
-            )
-            sftp = paramiko.SFTPClient.from_transport(conn)
-        except paramiko.SSHException as e:
-            raise OSError('could not connect to remote server {}: {}'.format(host, e.args[0]))
-
-        return conn, sftp
 
     # ========================
     # FILESYSTEM RELATED STUFF
@@ -465,9 +377,40 @@ class Workspace(object):
         # TODO: Create unique file names!
         return os.path.join(self.temp_dir, os.path.basename(file_path))
 
-    # ======================
-    # PARAMETER FRAMEWORK
-    # ======================
+    # ==============
+    # PARAMETERS
+    # ==============
+
+    def has_params(self):
+        if self.config['parameter_module'] != '':
+            if os.path.exists(self.get_abs_path('parameter_module')):
+                return True
+        return False
+
+    def init_params(self, **kwargs):
+        """Initializes parameter configuration and template variables.
+
+        Parameters
+        ----------
+        kwargs:
+
+
+        """
+        if not self.has_params():
+            logger.warning('you tried to initialize workspace parameters without an existing or valid parameters module')
+            return
+
+        pro = NestedDict(kwargs)  # provided args
+        pro_args = set(pro.keys())
+        req = NestedDict(self.parameters)  # required args
+        req_args = set(req.keys())
+
+        missing = req_args - pro_args
+        if len(missing) and not kwargs.get('ignore_missing', False):
+            raise KeyError('missing parameters: {!s}'.format(missing))
+
+        config = ConfigDict(self.parameters, **self.config['template.environment'])
+        self.parameters = NestedDict(config.render(**dict(zip(req_args, pro[req_args]))))
 
     def get_context(self):
         """Returns the template context (setting + extensions).
@@ -485,7 +428,7 @@ class Workspace(object):
         return pars - keys
 
     def get_module_parameters(self):
-        return Configuration(self.parameters, **self.config['template.environment']).variables()
+        return ConfigDict(self.parameters, **self.config['template.environment']).variables()
 
     def get_template_variables(self, templates):
         """Recursively parses undeclared variables in all template files and
@@ -574,3 +517,61 @@ class Workspace(object):
 
         """
         return self.env.get_template(template)
+
+    # =======================
+    # SSH/SFTP INITIALIZATION
+    # =======================
+
+    def _load_host_key(self, host):
+        knownhosts = os.path.expanduser('~/.ssh/known_hosts')
+        hostkey = None
+        try:
+            host_keys = paramiko.util.load_host_keys(knownhosts)
+        except IOError:
+            try:
+                # try ~/ssh/ too, because windows can't have a folder named ~/.ssh/
+                host_keys = paramiko.util.load_host_keys(knownhosts)
+            except IOError:
+                raise OSError('Unable to open ssh host keys file')
+
+        if host in host_keys:
+            hostkeytype = host_keys[host].keys()[0]
+            hostkey = host_keys[host][hostkeytype]
+
+        return hostkey
+
+    def _init_ssh_connection(self, **kwargs):
+        if kwargs.get('connection', False):
+            # TODO: load connection details from file!
+            host = ""
+            username = ""
+            password = ""
+            port = 22
+        elif kwargs.get('host', False):
+            host = kwargs.get('host')
+            username = kwargs.get('username')
+            password = getpass.getpass('Password ({}): '.format(host))
+            port = kwargs.get('port', 22)
+            gss_auth = kwargs.get('gss_auth', False)
+            gss_kex = kwargs.get('gss_key', False)
+        else:
+            raise KeyError('either connection name of connection details (host, username, etc.) must be specified')
+
+        paramiko.util.log_to_file(SSH_LOG_FILE, level=logging.DEBUG)
+        hostkey = self._load_host_key(host)
+
+        try:
+            conn = paramiko.Transport((host, port))
+            conn.connect(
+                hostkey,
+                username,
+                password,
+                gss_host=socket.getfqdn(host),
+                gss_auth=gss_auth,
+                gss_kex=gss_kex
+            )
+            sftp = paramiko.SFTPClient.from_transport(conn)
+        except paramiko.SSHException as e:
+            raise OSError('could not connect to remote server {}: {}'.format(host, e.args[0]))
+
+        return conn, sftp

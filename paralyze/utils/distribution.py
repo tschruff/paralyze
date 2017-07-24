@@ -1,11 +1,9 @@
 import numpy as np
 import math
 import copy
-import os
-import logging
 import warnings
 
-from scipy import interpolate, stats, special
+from scipy import interpolate, special
 from scipy.optimize import curve_fit
 
 

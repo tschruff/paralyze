@@ -44,58 +44,54 @@ class UtilsTests(TestCase):
         nd2.clear()
         self.assertEqual(len(nd2), 0)
 
-    def test_config_1(self):
+    def test_nested_config(self):
 
         settings = {
-            "y": "{{ x|int }}",
-            "z": "{{ nested['z'] }}",
+            "y": "{{ x }}",
+            "z": "{{ nested.z }}",
             "nested": {
                 "x": "{{ x }}",
-                "y": "{{ 2 * x }}",
+                "y": "{{ x }}",
                 "z": "{{ y }}"
             },
             "other_nested": {
-                "x": "{{ nested['z'] }}",
+                "x": "{{ nested.z }}",
                 "y": "{{ nested.y }}"
-            }
-        }
-
-        config = Configuration(settings)
-        values = config.render(x=3)
-
-        self.assertEqual(values['y'], '3')
-        self.assertEqual(values['nested']['y'], '6')
-        self.assertEqual(values['nested']['z'], '3')
-        self.assertEqual(values['nested']['x'], '3')
-        self.assertEqual(values['other_nested']['x'], '3')
-        self.assertEqual(values['other_nested']['y'], '6')
-
-        values = config.render(x=6)
-
-        self.assertEqual(values['y'], '6')
-        self.assertEqual(values['nested']['y'], '12')
-        self.assertEqual(values['nested']['z'], '6')
-        self.assertEqual(values['nested']['x'], '6')
-        self.assertEqual(values['other_nested']['x'], '6')
-        self.assertEqual(values['other_nested']['y'], '12')
-
-    def test_config_2(self):
-
-        settings = {
+            },
             "a": "{{ variables.x }}",
-            "b": "{{ variables.x + variables.y }}",
+            "b": "{{ variables.y }}",
             "c": "{{ a }}"
         }
 
-        config = Configuration(settings)
-        config = config.finalize(variables={'x': 1, 'y': 2})
+        config = ConfigDict(settings)
+        values = config.render(x=3, variables={'x': 1, 'y': 2})
+
+        self.assertEqual(len(config.variables()), 3)
+
+        self.assertEqual(values['y'], '3')
+        self.assertEqual(values['nested']['y'], '3')
+        self.assertEqual(values['nested']['z'], '3')
+        self.assertEqual(values['nested']['x'], '3')
+        self.assertEqual(values['other_nested']['x'], '3')
+        self.assertEqual(values['other_nested']['y'], '3')
+
+        values = config.render(x=6, variables={'x': 1, 'y': 2})
+
+        self.assertEqual(values['y'], '6')
+        self.assertEqual(values['nested']['y'], '6')
+        self.assertEqual(values['nested']['z'], '6')
+        self.assertEqual(values['nested']['x'], '6')
+        self.assertEqual(values['other_nested']['x'], '6')
+        self.assertEqual(values['other_nested']['y'], '6')
+
+        values = config.render(x=1, variables={'x': 1, 'y': 2})
 
         with self.assertRaises(KeyError):
-            print(config['e'])
+            print(values['e'])
 
-        self.assertEqual(int(config['a']), 1)
-        self.assertEqual(int(config['b']), 3)
-        self.assertEqual(int(config['c']), 1)
+        self.assertEqual(int(values['a']), 1)
+        self.assertEqual(int(values['b']), 2)
+        self.assertEqual(int(values['c']), 1)
 
 
 if __name__ == '__main__':

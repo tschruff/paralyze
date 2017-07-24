@@ -3,6 +3,7 @@ import collections
 
 FittingParams = collections.namedtuple('FittingParams', 'r_sq rmse')
 
+
 def get_fitting_parameters(fit_func, fit_x, fit_y, popt=()):
     """Returns R^2 and RMSE of fitting function.
     """
