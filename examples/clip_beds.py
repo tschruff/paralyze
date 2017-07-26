@@ -1,7 +1,5 @@
-from paralyze.core import Vector, AABB
-from paralyze.core.solids.io import CSBFile
-
-import numpy as np
+from paralyze.core import AABB
+from paralyze.core.solids import CSBFile
 
 bed = '/Users/tobs/sciebo/Diss/Data/csb/beds/ln-8-1.1.csv'
 out = '/Users/tobs/sciebo/Diss/Data/csb/beds/ln-8-1.1_clipped.csv'

@@ -1,11 +1,9 @@
-from paralyze.core.algebra import AABB, Vector
-from paralyze.core.solids.io import CSBFile
-
-import sys
-import math
 import glob
 import os
+import sys
 
+from paralyze.core.algebra import AABB, Vector
+from paralyze.core.solids import CSBFile
 
 ########################################################################################################################
 # USER INPUT

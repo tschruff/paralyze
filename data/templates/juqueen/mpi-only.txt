@@ -1,6 +1,0 @@
-{% extends "header.txt" %}
-{% block body %}
-runjob --np {{ nodes * cores_per_node }} --ranks-per-node {{ cores_per_node }} : {{ rpath(app_path) }} {{ rpath(config_path) }} {% block args %}{% endblock %}
-
-exit 0
-{% endblock %}

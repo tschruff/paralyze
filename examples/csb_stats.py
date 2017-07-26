@@ -9,15 +9,16 @@ Date:
     09.05.2017
 """
 
-import tarfile
+import argparse
 import os
 import sys
-import numpy as np
-import argparse
-import pandas as pd
+import tarfile
 
-from paralyze.core.solids.io import CSBFile
+import numpy as np
+import pandas as pd
 from paralyze.util.distribution import SizeDistribution
+
+from paralyze.solids import CSBFile
 
 
 def main():

@@ -3,7 +3,9 @@
 """
 from collections import abc
 
-import copy
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class NestedDict(abc.MutableMapping):
@@ -16,12 +18,19 @@ class NestedDict(abc.MutableMapping):
     """
 
     def __init__(self, mapping, level_sep='.'):
-        self._d = dict(mapping)
+
+        if isinstance(mapping, NestedDict):
+            self._d = dict(mapping.to_dict())
+        else:
+            self._d = dict(mapping)
+
         self._sep = level_sep
 
-        for k in self.keys():
+        for k, _ in iter_nested_mapping(self._d):
             if not isinstance(k, str):
                 raise TypeError('all keys must be str, not {}'.format(type(k)))
+            if len(k.split(level_sep)) > 1:
+                raise ValueError('key "{}" must not contain level separator "{}"'.format(k, level_sep))
 
     def __getitem__(self, key):
         """
@@ -38,6 +47,7 @@ class NestedDict(abc.MutableMapping):
         that means they are not converted to NestedDict instances.
 
         """
+        # logger.debug('NestedDict.__getitem__({})'.format(key))
         if isinstance(key, (list, tuple, set)):
             return tuple(self.__get(k) for k in key)
         return self.__get(key)
@@ -61,7 +71,7 @@ class NestedDict(abc.MutableMapping):
             del self.item_parent(key)[self.leaf_key(key)]
 
     def __iter__(self):
-        return self.__iter_leaf_keys__(self._d)
+        return self.__iter_keys__(self._d)
 
     def __iter_leaf_items__(self, mapping, parent_key=''):
         for key, value in mapping.items():
@@ -71,6 +81,20 @@ class NestedDict(abc.MutableMapping):
             else:
                 yield nested_key, value
 
+    def __iter_items__(self, mapping, parent_key=''):
+        for key, value in mapping.items():
+            nested_key = self.join_keys(parent_key, key)
+            yield nested_key, value
+            if isinstance(value, abc.Mapping):
+                yield from self.__iter_items__(value, nested_key)
+
+    def __iter_keys__(self, mapping, parent_key=''):
+        for key, value in mapping.items():
+            nested_key = self.join_keys(parent_key, key)
+            yield nested_key
+            if isinstance(value, abc.Mapping):
+                yield from self.__iter_keys__(value, nested_key)
+
     def __iter_leaf_keys__(self, mapping, parent_key=''):
         for key, value in mapping.items():
             nested_key = self.join_keys(parent_key, key)
@@ -78,6 +102,12 @@ class NestedDict(abc.MutableMapping):
                 yield from self.__iter_leaf_keys__(value, nested_key)
             else:
                 yield nested_key
+
+    def __iter_values__(self, mapping):
+        for value in mapping.values():
+            yield value
+            if isinstance(value, abc.Mapping):
+                yield from self.__iter_values__(value)
 
     def __iter_leaf_values__(self, mapping):
         for value in mapping.values():
@@ -87,7 +117,7 @@ class NestedDict(abc.MutableMapping):
                 yield value
 
     def __len__(self):
-        """Returns the number of leaf items.
+        """Returns the total number of items.
         """
         return len(self.keys())
 
@@ -101,7 +131,7 @@ class NestedDict(abc.MutableMapping):
         self._d = dict()
 
     def copy(self):
-        return NestedDict(copy.deepcopy(self._d), self._sep)
+        return NestedDict(self._d, self._sep)
 
     def item_parent(self, key):
         parent = self
@@ -116,6 +146,12 @@ class NestedDict(abc.MutableMapping):
         return self._sep.join(keys)
 
     def keys(self):
+        return [k for k in self.__iter_keys__(self._d)]
+
+    def leaf_items(self):
+        return {k: self[k] for k in self.__iter_leaf_keys__(self._d)}
+
+    def leaf_keys(self):
         return [k for k in self.__iter_leaf_keys__(self._d)]
 
     def leaf_key(self, key):
@@ -131,6 +167,9 @@ class NestedDict(abc.MutableMapping):
         return dict(self._d)
 
     def values(self):
+        return [v for v in self.__iter_values__(self._d)]
+
+    def leaf_values(self):
         return [v for v in self.__iter_leaf_values__(self._d)]
 
 

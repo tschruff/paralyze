@@ -6,6 +6,7 @@ from .mapping import NestedDict
 
 import logging
 import re
+import copy
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +27,11 @@ class ConfigDict(NestedDict):
         NestedDict.__init__(self, mapping, kwargs.get('level_sep', '.'))
         self.var_start = kwargs.get('var_start', '{{')
         self.var_end = kwargs.get('var_end', '}}')
-        self.buffer = None
-        self.buffer = self._simplify()
+        # copy of underlying nested dict with simplified templates
+        # increases performance of calls to finalize()
+        self.buffer = self._preprocess(NestedDict(copy.deepcopy(self._d), self.level_separator()))
 
-    def render(self, **kwargs):
+    def finalize(self, **kwargs):
         """Renders all template items given the values specified in kwargs.
 
         Parameters
@@ -38,19 +40,38 @@ class ConfigDict(NestedDict):
 
         Returns
         -------
-
+        A NestedDict instance of self where all template variables have been replaced by provided kwargs.
         """
-        return self._render_all(self.buffer.copy(), self._render_context(**kwargs))
+        config = self.buffer.copy()
+        config.update(kwargs)
+        return self._render_all(config, self.create_context(config))
 
     def variables(self):
         variables = set([])
         for k, v in self.items():
             if not isinstance(v, str):
                 continue
-            variables |= self._create_template(v).variables()
+            variables |= self.create_template(v).variables()
         return variables - set(self.keys())
 
-    def _create_template(self, item):
+    def create_context(self, mapping):
+
+        class Context(abc.Mapping):
+            def __init__(self, mapping):
+                self.__mapping = mapping
+
+            def __getitem__(self, key):
+                return self.__mapping[key]
+
+            def __iter__(self):
+                return iter(self.__mapping)
+
+            def __len__(self):
+                return len(self.__mapping)
+
+        return Context(mapping)
+
+    def create_template(self, item):
 
         class Template(object):
             pattern = r'{start}\s*(?P<var>{id})\s*{end}'.format(
@@ -76,35 +97,12 @@ class ConfigDict(NestedDict):
 
         return Template(item)
 
-    def _render_context(self, **kwargs):
-
-        class Context(abc.Mapping):
-            def __init__(self, mapping):
-                self.__mapping = mapping
-
-            def __getitem__(self, key):
-                return self.__mapping[key]
-
-            def __iter__(self):
-                return iter(self.__mapping)
-
-            def __len__(self):
-                return len(self.__mapping)
-
-        if self.buffer:
-            context = self.buffer.copy()
-        else:
-            context = self.copy()
-
-        context.update(kwargs)
-        return Context(context)
-
-    def _simplify(self):
-        return self._render_all(self.copy(), self._render_context(), True)
+    def _preprocess(self, mapping):
+        return self._render_all(mapping, self.create_context(mapping), True)
 
     def _render_all(self, mapping, context, safe=False):
         for k, v in mapping.items():
-            if isinstance(v, (list, tuple)):
+            if isinstance(v, (tuple, list)):
                 mapping[k] = type(v)(map(lambda item: self._render_item(item, context, safe), mapping[k]))
             else:
                 mapping[k] = self._render_item(v, context, safe)
@@ -127,10 +125,10 @@ class ConfigDict(NestedDict):
         if safe:
             old = item
             while True:
-                new = self._create_template(old).safe_substitute(**context)
+                new = self.create_template(old).safe_substitute(**context)
                 if new == old:
                     break
                 else:
                     old = new
             return new
-        return self._create_template(item).substitute(**context)
+        return self.create_template(item).substitute(**context)

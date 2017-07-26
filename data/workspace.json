@@ -1,32 +1,40 @@
 {
-    "__paralyze_version__": "{PARALYZE_VERSION}",
+    "template": {
+        "environment": {
+            "block_start_string": "{%",
+            "block_end_string": "%}",
+            "variable_start_string": "{{",
+            "variable_end_string": "}}",
+            "comment_start_string": "{#",
+            "comment_end_string": "#}",
+            "line_statement_prefix": null,
+            "line_comment_prefix": "//",
+            "trim_blocks": false,
+            "lstrip_blocks": false,
+            "newline_sequence": "\n",
+            "keep_trailing_newline": false,
+            "extensions": "",
+            "optimized": true,
+            "autoescape": false,
+            "cache_size": 400,
+            "auto_reload": true,
+            "enable_async": true
+        },
 
-    "app_dir": "apps",
-    "app_file": "<not-set>",
-    "app_path": "{app_dir}/{app_file}",
+        "loader": {
+            "dirs": [],
+            "follow_links": true,
+            "encoding": "utf-8"
+        },
 
-    "job_type": "",
-    "job_name": "",
-
-    "jobs": {
-        "other_job": {
-            "app_dir": "other_apps",
-            "app_file": "other_app_file"
-        }
+        "context_extension_dirs": []
     },
 
-    "templates": {
-        "job": "<not-set>.sh",
-        "config": "<not-set>.dat"
-    },
+    "parameter_module": "",
 
-    "files": {
-        "job": "",
-        "config": ""
-    },
-
-    "template_dirs": "",
-
-    "run_dir": "",
-    "schedule_cmd": "echo {files[job]}"
+    "logging": {
+        "level": "WARNING",
+        "file": "log.txt",
+        "file_format": "[%(asctime)-15s][%(levelname)-7s] %(message)s"
+    }
 }

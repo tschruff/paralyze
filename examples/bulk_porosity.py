@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 
-from paralyze.core.blocks import UniformBlockStorage
+import os
+
+import numpy as np
 from paralyze.core.bodies import Sphere
 from paralyze.core.bodies.io.csb import CSBFile
 
-from paralyze.analysis.body.mapping import map_bodies_to_field
-from paralyze.analysis.field.io import save_field
-
-import os
-import numpy as np
-
+from paralyze.core.blocks import UniformBlockStorage
+from paralyze.fields import save_field
+from paralyze.solids.mapping import map_bodies_to_field
 
 WORK_FOLDER = '/Users/tobs/Programming/PlayGround/paralyze'
 INPUT = 'uniform-2'

@@ -1,14 +1,14 @@
+from ..algebra import AABB, Vector, factors
+from ..fields import Cell, CellInterval, Field
+
+from .block import Block
+from .storage import BlockStorage
+
 import itertools
 import math
 import multiprocessing as mp
 
 import numpy as np
-
-from paralyze.core.algebra import AABB, Vector
-from paralyze.core.blocks import Block, BlockStorage
-from paralyze.core.bodies import BodyStorage
-from paralyze.core.fields import Cell, CellInterval, Field
-from paralyze.core.algebra.factorization import factors
 
 
 class UniformBlock(Block):

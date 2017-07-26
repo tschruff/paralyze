@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+"""Module documentation goes here ...
+
+"""
 from ..parsable import Parsable
 
 import numpy as np
@@ -46,6 +50,9 @@ class Vector(np.ndarray, Parsable):
 
     def __str__(self):
         return '<{},{},{}>'.format(self.x, self.y, self.z)
+
+    def __unicode__(self):
+        return str(self)
 
     def __repr__(self):
         return 'Vector(({},{},{}))'.format(self.x, self.y, self.z)

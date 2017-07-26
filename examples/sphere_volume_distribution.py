@@ -1,12 +1,12 @@
+import csv
+import math
 import os
 import sys
-import math
-import csv
+
 import numpy as np
 
-from paralyze.core import AABB, Vector
-from paralyze.core.solids import create_sphere
-from paralyze.core.solids.io import CSBFile
+from paralyze.core import AABB
+from paralyze.core.solids import CSBFile
 
 PI_THIRDS = math.pi/3.
 FOUR_THIRDS_PI = 4/3. * math.pi

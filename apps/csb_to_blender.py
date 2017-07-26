@@ -1,8 +1,9 @@
-from paralyze.core.solids import Sphere
-from paralyze.core.solids.io import CSBFile
+import argparse
 
 import bpy
-import argparse
+
+from paralyze.core.solids import CSBFile
+from paralyze.core.solids import Sphere
 
 
 def create_blender_spheres(spheres, segments, rings):

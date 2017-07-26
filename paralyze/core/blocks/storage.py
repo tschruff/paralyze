@@ -4,7 +4,6 @@ import numpy as np
 from functools import partial
 from .block import Block
 from ..algebra import AABB, Vector
-from ..bodies import BodyStorage
 from ..fields import Cell, CellInterval, Field, update_operations
 
 

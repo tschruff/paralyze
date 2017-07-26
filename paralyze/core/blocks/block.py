@@ -1,5 +1,4 @@
 from ..fields.field import Field
-from ..bodies.bodystorage import BodyStorage
 
 
 class Block(object):

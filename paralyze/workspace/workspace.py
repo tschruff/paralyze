@@ -96,8 +96,8 @@ class Workspace(object):
         self.extensions = dict()
         self.temp_dir = None
         self.env = None
-        self.config = dict()
-        self.parameters = dict()
+        self.config = NestedDict(dict())
+        self.params = NestedDict(dict())
 
         if len(args) == 1:
             kwargs['path'] = str(args[0])
@@ -217,7 +217,7 @@ class Workspace(object):
         of this class are used to store the configuration and global objects,
         and are used to load templates from the file system or remote locations.
         """
-        config = self.config['template.loader'].copy()
+        config = self.config['template.loader']
 
         if self.is_remote():
             loader = RemoteFileSystemLoader(
@@ -228,7 +228,9 @@ class Workspace(object):
                 config['dirs'], encoding=config['encoding'], followlinks=config['follow_links']
             )
 
-        self.env = jinja2.Environment(loader=loader, **self.config['template.environment'])
+        env_config = self.config['template.environment']
+        env_config['undefined'] = jinja2.make_logging_undefined(logger=logger, base=jinja2.StrictUndefined)
+        self.env = jinja2.Environment(loader=loader, **env_config)
 
     def _init_context_extensions(self):
         """
@@ -247,10 +249,9 @@ class Workspace(object):
         """
         extensions = {}
         for extension_dir in self.config['template.context_extension_dirs']:
-            abs_ext_dir = self.abs_path(extension_dir)
             ext_init = self.abs_path(extension_dir, '__init__.py')
             if self.path_exists(ext_init):
-                mod = importlib.import_module(abs_ext_dir)
+                mod = importlib.import_module(extension_dir)
                 for ext_key in mod.__all__:
                     if ext_key in extensions.keys():
                         logger.warning('duplicate extension "{}". Former extension will be replaced!'.format(ext_key))
@@ -275,9 +276,9 @@ class Workspace(object):
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             mod.config['root_dir'] = self.root_dir
-            self.parameters = NestedDict(mod.config)
+            self.params = NestedDict(mod.config)
         else:
-            self.parameters = NestedDict(dict())
+            self.params = NestedDict(dict())
 
     def _create(self, config):
         """Creates a new workspace configuration folder and file.
@@ -349,7 +350,7 @@ class Workspace(object):
         # file_path is absolute from here on!
 
         if not mode.startswith('w') and not self.path_exists(file_path):
-            raise OSError('no such file or directory: {}'.format(file_path))
+            raise IOError('no such file: {}'.format(file_path))
 
         if self.is_remote():
             # copy remote file to temp dir and open it from there
@@ -372,10 +373,13 @@ class Workspace(object):
     def _create_temp_file_path(self, file_path):
         """Returns a path to a new temporary file.
         """
-        if self.temp_dir is None:
-            self.temp_dir = tempfile.mkdtemp(prefix='paralyze')
+        self.temp_dir = self.temp_dir or tempfile.mkdtemp(prefix='paralyze')
         # TODO: Create unique file names!
         return os.path.join(self.temp_dir, os.path.basename(file_path))
+
+    def _create_config(self, mapping):
+        env = self.config['template.environment']
+        return ConfigDict(mapping, var_start=env['variable_start_string'], var_end=env['variable_end_string'])
 
     # ==============
     # PARAMETERS
@@ -397,38 +401,37 @@ class Workspace(object):
 
         """
         if not self.has_params():
-            logger.warning('you tried to initialize workspace parameters without an existing or valid parameters module')
+            logger.warning('you tried to initialize workspace parameters without an existing parameters module')
             return
 
         pro = NestedDict(kwargs)  # provided args
-        pro_args = set(pro.keys())
-        req = NestedDict(self.parameters)  # required args
-        req_args = set(req.keys())
+        pro_args = set(pro.leaf_keys())
+        req_args = self.get_parameter_variables()
 
         missing = req_args - pro_args
         if len(missing) and not kwargs.get('ignore_missing', False):
-            raise KeyError('missing parameters: {!s}'.format(missing))
+            raise KeyError('missing parameters: {!s}'.format(', '.join(missing)))
 
-        config = ConfigDict(self.parameters, **self.config['template.environment'])
-        self.parameters = NestedDict(config.render(**dict(zip(req_args, pro[req_args]))))
+        context = dict(zip(req_args, pro[req_args]))
+        self.params = self._create_config(self.params).finalize(**context)
+        logger.debug('initialized params: {}'.format(self.params))
 
-    def get_context(self):
-        """Returns the template context (setting + extensions).
+    def get_context(self, **kwargs):
+        """Returns the template context (parameters + extensions).
         """
-        context = self.config
+        context = self.params.to_dict()
         context.update(self.get_context_extensions())
+        context.update(kwargs)
         return context
 
     def get_context_extensions(self):
         return self.extensions
 
-    def get_undefined(self, templates=()):
-        pars = self.get_module_parameters() | self.get_template_variables(templates)
-        keys = self.parameters.keys()
-        return pars - keys
+    def get_variables(self, templates=()):
+        return self.get_parameter_variables() | self.get_template_variables(templates)
 
-    def get_module_parameters(self):
-        return ConfigDict(self.parameters, **self.config['template.environment']).variables()
+    def get_parameter_variables(self):
+        return self._create_config(self.params).variables()
 
     def get_template_variables(self, templates):
         """Recursively parses undeclared variables in all template files and
@@ -448,9 +451,7 @@ class Workspace(object):
         for template in templates:
             var = self._get_template_variables(template)
             template_vars.update(var)
-        # remove builtin names
-        template_vars = template_vars - self._builtin_names
-        return template_vars
+        return template_vars - set(self.params.keys())
 
     def _get_template_variables(self, template):
         """Recursively parses undeclared variables in template file and all
@@ -464,24 +465,28 @@ class Workspace(object):
         Returns
         -------
         template_vars: set
-            set of template variables as strings
+            the set of template variables (strings)
         """
-        template = self.get_template_source(template)[0]
+        logger.debug('loading template: {}'.format(template))
+        source = self.get_template_source(template)[0]
 
         try:
-            template_ast = self.env.parse(template)
+            logger.debug('parsing template source ...')
+            template_ast = self.env.parse(source)
         except jinja2.TemplateSyntaxError as e:
-            logger.error('error while parsing template file "{}": {} (line: {})'.format(template, e.message, e.lineno))
+            logger.error('while parsing template {}: {} (line: {})'.format(template, e.message, e.lineno))
             return set()
 
+        logger.debug('searching for undeclared variables ...')
         template_vars = meta.find_undeclared_variables(template_ast)
+        logger.debug('found undeclared variables: {}'.format(template_vars))
 
         for ref_template in meta.find_referenced_templates(template_ast):
             template_vars.update(self._get_template_variables(ref_template))
 
         return template_vars
 
-    def render_template(self, template, custom_context=None):
+    def render_template(self, template, **custom_context):
         """
 
         Parameters
@@ -493,10 +498,24 @@ class Workspace(object):
         """
         # load template file
         template = self.get_template(template)
+        context = self.get_context(**custom_context)
 
-        context = self.get_context()
-        context.update(custom_context or {})
-        return template.render(**context)
+        logger.debug('render context: {!r}'.format(context))
+
+        try:
+            return template.render(**context)
+        except jinja2.exceptions.UndefinedError as e:
+            logger.error('{} (template: {})'.format(e.message, template.filename))
+            raise
+        except jinja2.exceptions.TemplateNotFound as e:
+            logger.error('file "{}" not found for template: {}'.format(e.message, template.filename))
+            raise
+        except jinja2.exceptions.TemplateSyntaxError as e:
+            logger.error('{} in template: {}'.format(e.message, template.filename))
+            raise
+        except IOError as e:
+            logger.error(str(e))
+            raise
 
     def get_template_source(self, template):
         """Returns the (source, filename, uptodate) tuple of the specified template.
@@ -540,38 +559,47 @@ class Workspace(object):
 
         return hostkey
 
-    def _init_ssh_connection(self, **kwargs):
+    def _get_connection(self, **kwargs):
+        import collections
+        Connection = collections.namedtuple('Connection', 'host username password port gss_auth gss_kex')
         if kwargs.get('connection', False):
             # TODO: load connection details from file!
             host = ""
             username = ""
             password = ""
             port = 22
+            gss_auth = False
+            gss_kex = False
         elif kwargs.get('host', False):
-            host = kwargs.get('host')
-            username = kwargs.get('username')
-            password = getpass.getpass('Password ({}): '.format(host))
-            port = kwargs.get('port', 22)
-            gss_auth = kwargs.get('gss_auth', False)
-            gss_kex = kwargs.get('gss_key', False)
+            return Connection(
+                host=kwargs['host'],
+                username=kwargs['username'],
+                password=kwargs.get('password', getpass.getpass('Password ({}): '.format(kwargs['host']))),
+                port=kwargs.get('port', 22),
+                gss_auth=kwargs.get('gss_auth', False),
+                gss_kex=kwargs.get('gss_kex', False)
+            )
         else:
             raise KeyError('either connection name of connection details (host, username, etc.) must be specified')
 
+    def _init_ssh_connection(self, **kwargs):
+        c = self._get_connection(**kwargs)
+
         paramiko.util.log_to_file(SSH_LOG_FILE, level=logging.DEBUG)
-        hostkey = self._load_host_key(host)
+        hostkey = self._load_host_key(c.host)
 
         try:
-            conn = paramiko.Transport((host, port))
+            conn = paramiko.Transport((c.host, c.port))
             conn.connect(
                 hostkey,
-                username,
-                password,
-                gss_host=socket.getfqdn(host),
-                gss_auth=gss_auth,
-                gss_kex=gss_kex
+                c.username,
+                c.password,
+                gss_host=socket.getfqdn(c.host),
+                gss_auth=c.gss_auth,
+                gss_kex=c.gss_kex
             )
             sftp = paramiko.SFTPClient.from_transport(conn)
         except paramiko.SSHException as e:
-            raise OSError('could not connect to remote server {}: {}'.format(host, e.args[0]))
+            raise OSError('could not connect to remote server {}: {}'.format(c.host, str(e)))
 
         return conn, sftp

@@ -47,7 +47,7 @@ class AABB(np.ndarray, Parsable):
         self = self.merged(other)
 
     def __repr__(self):
-        return 'AABB({!s},{!s})'.format(self.min, self.max)
+        return 'AABB({!r},{!r})'.format(self.min, self.max)
 
     def __str__(self):
         return '[{!s},{!s}]'.format(self.min, self.max)

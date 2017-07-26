@@ -1,10 +1,12 @@
-from setuptools import setup
-from setuptools.command.install import install
 from codecs import open
 from os import path
 
-import paralyze.solids
+from setuptools import setup
+from setuptools.command.install import install
 
+from paralyze import __version__
+
+import paralyze.core.solids as solids
 
 here = path.abspath(path.dirname(__file__))
 
@@ -20,7 +22,6 @@ class InstallCommand(install):
         self.solid_dtype = 'float32'
 
     def finalize_options(self):
-        #print('The custom option for install is ', self.custom_option)
         install.finalize_options(self)
 
     def run(self):
@@ -35,11 +36,11 @@ def readme():
 
 setup(
     name='paralyze',
-    version='0.1.0a1',
+    version=__version__,
     description='A scientific framework for parallel computational geometry',
     long_description=readme(),
 
-    cmdclass = {
+    cmdclass={
         'install': InstallCommand
     },
 
@@ -64,7 +65,7 @@ setup(
     license='BSD',
     packages=['paralyze'],
 
-    install_requires=['numpy', 'jinja2', 'paramiko'],
+    install_requires=['numpy', 'jinja2', 'scipy', 'paramiko'],
 
     # additional data will be installed relative to sys.prefix
     # list of (install_folder, [list_of_files_to_be_installed])
@@ -78,9 +79,9 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'paralyze.csb=paralyze.apps.csb_cli:main',
-            'paralyze.job=paralyze.apps.job_cli:main',
-            'paralyze.workspace=paralyze.apps.workspace_cli:main'
+            'paralyze.csb=apps.csb_cli:main',
+            'paralyze.job=apps.job_cli:main',
+            'paralyze.workspace=apps.workspace_cli:main'
         ],
     },
 
