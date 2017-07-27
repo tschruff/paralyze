@@ -12,6 +12,7 @@ from paralyze.utils import ConfigDict, NestedDict
 from .remote import RemoteFileSystemLoader
 
 import os
+import sys
 import logging
 import shutil
 import importlib.util
@@ -168,135 +169,6 @@ class Workspace(object):
         mapping = mapping or self.config
         return self.abs_path(mapping[key])
 
-    # ==============
-    # INITIALIZATION
-    # ==============
-
-    def _init(self):
-        self.config = NestedDict(json.load(open(self.config_file_path, 'r')))
-        self._validate_config()
-        # init main logger
-        self._init_logger()
-        # check workspace and code version compatibility
-        self._check_version()
-        # init jinja's template environment
-        self._init_template_env()
-        # init custom context extensions
-        self._init_context_extensions()
-        # init parameter Python module
-        self._init_parameter_module()
-
-    def _validate_config(self):
-        # TODO: Implement nested dict key validation
-        pass
-
-    def _init_logger(self):
-        logging_config = self.config['logging']
-        ll = logging_config['level']
-        lf = logging_config['file']
-        ff = logging_config['file_format']
-
-        fh = logging.FileHandler(lf)
-        fh.setFormatter(logging.Formatter(ff))
-        fh.setLevel(ll)
-
-        logger.addHandler(fh)
-
-    def _check_version(self):
-        """Checks code and workspace version compatibility.
-
-        """
-        # TODO: Implement version comparison and policy.
-        wsp_version = self.version          # workspace version
-        run_version = paralyze.__version__  # code version
-
-    def _init_template_env(self):
-        """Create and return a new jinja2 environment.
-
-        Jinja2 uses a central object called the template Environment. Instances
-        of this class are used to store the configuration and global objects,
-        and are used to load templates from the file system or remote locations.
-        """
-        config = self.config['template.loader']
-
-        if self.is_remote():
-            loader = RemoteFileSystemLoader(
-                self._sftp, config['dirs'], encoding=config['encoding'], follow_links=config['follow_links']
-            )
-        else:
-            loader = jinja2.FileSystemLoader(
-                config['dirs'], encoding=config['encoding'], followlinks=config['follow_links']
-            )
-
-        env_config = self.config['template.environment']
-        env_config['undefined'] = jinja2.make_logging_undefined(logger=logger, base=jinja2.StrictUndefined)
-        self.env = jinja2.Environment(loader=loader, **env_config)
-
-    def _init_context_extensions(self):
-        """
-        """
-        self.extensions = {}
-        if self.is_remote():
-            self.extensions = self._init_remote_extensions()
-        else:
-            self.extensions = self._init_local_extensions()
-
-    def _init_local_extensions(self):
-        """Loads local context extensions.
-
-        extension_dir/__init__.py
-        extension_dir/my_extension.py
-        """
-        extensions = {}
-        for extension_dir in self.config['template.context_extension_dirs']:
-            ext_init = self.abs_path(extension_dir, '__init__.py')
-            if self.path_exists(ext_init):
-                mod = importlib.import_module(extension_dir)
-                for ext_key in mod.__all__:
-                    if ext_key in extensions.keys():
-                        logger.warning('duplicate extension "{}". Former extension will be replaced!'.format(ext_key))
-                    extensions[ext_key] = getattr(mod, ext_key)
-            else:
-                logger.warning('no __init__.py found in extension directory {}'.format(extension_dir))
-        return extensions
-
-    def _init_remote_extensions(self):
-        """
-        """
-        # TODO: Implement remote extension initialization.
-        return {}
-
-    def _init_parameter_module(self):
-        """Loads the workspace parameters Python module.
-
-        """
-        # TODO: Implement exception handling for parameter module initialization
-        if self.has_params():
-            spec = importlib.util.spec_from_file_location('workspace.parameters', self.get_abs_path('parameter_module'))
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            mod.config['root_dir'] = self.root_dir
-            self.params = NestedDict(mod.config)
-        else:
-            self.params = NestedDict(dict())
-
-    def _create(self, config):
-        """Creates a new workspace configuration folder and file.
-        """
-        # create hidden configuration folder
-        if not self.path_exists(self.config_dir):
-            logger.info('creating paralyze workspace at {}'.format(self.root_dir))
-            self.mkdir(self.config_dir)
-        # set paralyze version
-        config['__version__'] = paralyze.__version__
-        with self.open(self.config_file_path, 'w') as config_file:
-            logger.info('saving paralyze workspace config to file {}'.format(self.config_file_path))
-            json.dump(config, config_file, indent='\t', sort_keys=True)
-
-    # ========================
-    # FILESYSTEM RELATED STUFF
-    # ========================
-
     def rel_path(self, arg):
         if self.is_remote():
             return posixpath.relpath(arg, self.root_dir)
@@ -369,6 +241,120 @@ class Workspace(object):
             except IOError:
                 return False
         return os.path.exists(path)
+
+    # ==============
+    # INITIALIZATION
+    # ==============
+
+    def _init(self):
+        self.config = NestedDict(json.load(open(self.config_file_path, 'r')))
+        self._validate_config()
+        # init main logger
+        self._init_logger()
+        # check workspace and code version compatibility
+        self._check_version()
+        # init jinja's template environment
+        self._init_template_env()
+        # init custom context extensions
+        self._init_context_extensions()
+        # init parameter Python module
+        self._init_parameter_module()
+
+    def _validate_config(self):
+        # TODO: Implement nested dict key validation
+        pass
+
+    def _init_logger(self):
+        logging_config = self.config['logging']
+        ll = logging_config['level']
+        lf = logging_config['file']
+        ff = logging_config['file_format']
+
+        fh = logging.FileHandler(lf)
+        fh.setFormatter(logging.Formatter(ff))
+        fh.setLevel(ll)
+
+        logger.addHandler(fh)
+
+    def _check_version(self):
+        """Checks code and workspace version compatibility.
+
+        """
+        # TODO: Implement version comparison and policy.
+        wsp_version = self.version          # workspace version
+        run_version = paralyze.__version__  # code version
+
+    def _init_template_env(self):
+        """Create and return a new jinja2 environment.
+
+        Jinja2 uses a central object called the template Environment. Instances
+        of this class are used to store the configuration and global objects,
+        and are used to load templates from the file system or remote locations.
+        """
+        config = self.config['template.loader']
+
+        if self.is_remote():
+            loader = RemoteFileSystemLoader(
+                self._sftp, config['dirs'], encoding=config['encoding'], follow_links=config['follow_links']
+            )
+        else:
+            loader = jinja2.FileSystemLoader(
+                config['dirs'], encoding=config['encoding'], followlinks=config['follow_links']
+            )
+
+        env_config = self.config['template.environment']
+        env_config['undefined'] = jinja2.make_logging_undefined(logger=logger, base=jinja2.StrictUndefined)
+        self.env = jinja2.Environment(loader=loader, **env_config)
+
+    def _init_context_extensions(self):
+        """
+        """
+        self.extensions = {}
+        if self.is_remote():
+            # TODO: Implement remote extension initialization
+            pass
+        else:
+            self.extensions = self._init_local_extensions()
+
+    def _init_local_extensions(self):
+        """Loads local context extensions (Python packages).
+        """
+        ext = {}
+        for i, ext_dir in enumerate(self.config['template.context_extension_dirs']):
+            abs_ext_dir = self.abs_path(ext_dir)
+            ext_mod = self.load_package(abs_ext_dir)
+            for ext_key in ext_mod.__all__:
+                if ext_key in ext.keys():
+                    logger.warning('duplicate extension name "{}". Former one will be replaced!'.format(ext_key))
+                ext[ext_key] = getattr(ext_mod, ext_key)
+        return ext
+
+    def _init_parameter_module(self):
+        """Loads the workspace parameters Python module.
+        """
+        if self.has_params():
+            mod = self.load_module('parameters', self.abs_path(self.config['parameter_module']))
+            mod.config['root_dir'] = self.root_dir
+            self.params = NestedDict(mod.config)
+        else:
+            self.params = NestedDict(dict())
+
+    def _create(self, config):
+        """Creates a new workspace configuration folder and file.
+        """
+        # create hidden configuration folder
+        if not self.path_exists(self.config_dir):
+            logger.info('creating paralyze workspace at {}'.format(self.root_dir))
+            self.mkdir(self.config_dir)
+        # set paralyze version
+        config['__version__'] = paralyze.__version__
+        with self.open(self.config_file_path, 'w') as config_file:
+            logger.info('saving paralyze workspace config to file {}'.format(self.config_file_path))
+            json.dump(config, config_file, indent='\t', sort_keys=True)
+
+    # ========================
+    # FILESYSTEM RELATED STUFF
+    # ========================
 
     def _create_temp_file_path(self, file_path):
         """Returns a path to a new temporary file.
@@ -603,3 +589,39 @@ class Workspace(object):
             raise OSError('could not connect to remote server {}: {}'.format(c.host, str(e)))
 
         return conn, sftp
+
+    # =======================
+    # UTILITIES
+    # =======================
+
+    def load_module(self, name, abs_path):
+        if not self.path_exists(abs_path):
+            logger.error('specified module {} does not exist'.format(abs_path))
+            return None
+        spec = importlib.util.spec_from_file_location('paralyze.workspace.' + name, abs_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def load_package(self, abs_path):
+        """
+
+        Parameters
+        ----------
+        abs_path: str
+            path to package folder
+
+        Returns
+        -------
+        the loaded package.
+        """
+        if not self.path_exists(abs_path):
+            logger.error('specified package {} does not exist'.format(abs_path))
+            return None
+        if not self.path_exists(os.path.join(abs_path, '__init__.py')):
+            logger.error('package {} has no __init__.py'.format(abs_path))
+            return None
+        parent_path, name = os.path.split(abs_path)
+        if parent_path not in sys.path:
+            sys.path.append(parent_path)
+        return importlib.import_module(name)
