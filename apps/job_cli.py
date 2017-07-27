@@ -2,6 +2,8 @@ import argparse
 import logging
 import os
 import sys
+import csv
+import datetime
 
 from paralyze.utils.io import type_cast
 from paralyze.workspace import *
@@ -10,11 +12,10 @@ logger = logging.getLogger(__name__)
 
 LOG_STREAM_FORMAT = '[%(levelname)-7s] %(message)s'
 
-REQUIRED_WORKSPACE_KEYS = ['run_dir', 'job_id', 'tasks', 'templates']
+REQUIRED_WORKSPACE_KEYS = ['run_dir', 'job_id', 'tasks', 'templates', 'history_dir']
 OPTIONAL_WORKSPACE_KEYS = ['schedule_cmd', 'make_dirs']
 
-# default workspace settings
-DEFAULT_PARAMETER_CONFIG = {}
+HISTORY_FILE = "{task}_history.csv"
 
 
 def render_and_save(wsp, template_key, force=False):
@@ -92,17 +93,62 @@ def import_task_settings(task, wsp):
         sys.exit(1)
 
 
+def add_to_history(wsp, task, params):
+    """
+
+    Parameters
+    ----------
+    wsp: Workspace
+    task: str
+    params: dict
+
+    Returns
+    -------
+
+    """
+    history_file = wsp.abs_path(wsp.params['history_dir'], HISTORY_FILE.format(task=task))
+    exists = os.path.exists(history_file)
+
+    params['schedule_date'] = datetime.datetime.now()
+    params['executed'] = "nan"
+    params['finished'] = "nan"
+
+    if exists:
+        with open(history_file, 'r') as csv_file:
+            field_names = csv.DictReader(csv_file).fieldnames
+    else:
+        field_names = params.keys()
+
+    with open(history_file, 'a') as csv_file:
+        writer = csv.DictWriter(csv_file, field_names)
+        if not exists:
+            writer.writeheader()
+        writer.writerow(params)
+
+
 def argument_parser():
     """
     """
     parser = argparse.ArgumentParser()
     # add job_cli arguments
-    parser.add_argument('--create-workspace', action='store_true', default=False, help="create a new workspace at the current work directory")
-    parser.add_argument('--force', action='store_true', default=False, help='ignore and override existing files')
-    parser.add_argument('--schedule', action='store_true', default=False, help='add job to the system scheduler after creation')
-    parser.add_argument('--task', type=str, default='', help='import task settings to the global scope (may replace global settings)')
-    parser.add_argument('--verbose', action='store_true', default=False, help='increase logging output')
-    parser.add_argument('--print-vars', action='store_true', default=False, help='prints undefined parameter variables to stdout')
+    parser.add_argument('task', type=str,
+                        help='import task settings to the global scope (may replace global settings)')
+
+    parser.add_argument('--create-workspace', action='store_true', default=False,
+                        help="create a new workspace at the current work directory")
+
+    parser.add_argument('--force', action='store_true', default=False,
+                        help='ignore and override existing files')
+
+    parser.add_argument('--schedule', action='store_true', default=False,
+                        help='add job to the system scheduler after creation')
+
+    parser.add_argument('--verbose', action='store_true', default=False,
+                        help='set log level to DEBUG')
+
+    parser.add_argument('--print-vars', action='store_true', default=False,
+                        help='print undefined parameter variables to stdout')
+
     return parser
 
 
@@ -153,9 +199,10 @@ def main():
     for var in undefined:
         wsp_parser.add_argument('--%s' % var, required=True, type=type_cast)
     wsp_args, unused_args = wsp_parser.parse_known_args(wsp_args)
+    wsp_args = vars(wsp_args)
 
     # initialize workspace variables with command line arguments
-    wsp.init_params(**vars(wsp_args))
+    wsp.init_params(**wsp_args)
 
     # create directories
     make_dirs(wsp)
@@ -171,6 +218,7 @@ def main():
         logger.info('scheduling job "{}" for execution'.format(wsp.params['job_id']))
         if 'schedule_cmd' in wsp.params:
             os.system(wsp.params['schedule_cmd'])
+            add_to_history(wsp, args.task, dict(zip(undefined, [wsp_args[k] for k in undefined])))
         else:
             logger.error('"schedule_cmd" not defined in parameter config')
             sys.exit(1)
