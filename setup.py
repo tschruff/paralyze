@@ -69,7 +69,7 @@ setup(
 
     # additional data will be installed relative to sys.prefix
     # list of (install_folder, [list_of_files_to_be_installed])
-    data_files=[('data', ['data/workspace.json'])],
+    data_files=[('data', ['data/settings.json'])],
 
     # we use "nose" for tests
     # $ python setup.py test

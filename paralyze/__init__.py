@@ -1,3 +1,5 @@
+from .settings import SETTINGS
+
 import sys
 import warnings
 

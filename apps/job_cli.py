@@ -6,7 +6,7 @@ import csv
 import datetime
 
 from paralyze.utils.io import type_cast
-from paralyze.workspace import *
+from paralyze.workspace import TemplateWorkspace
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,8 @@ def render_and_save(wsp, template_key, force=False):
 
     Parameters
     ----------
+    wsp: TemplateWorkspace
+
     template_key: str
         Name of template
     force: bool
@@ -32,14 +34,14 @@ def render_and_save(wsp, template_key, force=False):
     template = wsp.params['templates'][template_key]
     ext = os.path.splitext(template)[1]
     out_file = wsp.params.get('files', {}).get(template_key, os.path.join(wsp.params['run_dir'], wsp.params['job_id']+'.'+ext))
-    out_file = wsp.abs_path(out_file)
-    if os.path.exists(out_file) and not force:
-        logger.error('file "{}" already exists, specify --force to replace.'.format(out_file))
+    abs_out = wsp.abs_path(out_file)
+    if os.path.exists(abs_out) and not force:
+        logger.error('file "{}" already exists, specify "--force" to replace.'.format(out_file))
         return False
 
     content = wsp.render_template(template)
 
-    with open(out_file, 'w') as dest:
+    with open(abs_out, 'w') as dest:
         dest.write(content)
 
     logger.info('created file "{}"'.format(out_file))
@@ -48,13 +50,18 @@ def render_and_save(wsp, template_key, force=False):
 
 def make_dirs(wsp):
     """
+
+    Parameters
+    ----------
+    wsp: TemplateWorkspace
+
     """
     for key in wsp.params.get('make_dirs', []):
         folder = wsp.abs_path(key)
         if not os.path.exists(folder):
             try:
                 os.makedirs(folder)
-                logger.info('created folder "{}"'.format(folder))
+                logger.info('created folder "{}"'.format(key))
             except OSError as e:
                 logger.error(str(e))
                 sys.exit(1)
@@ -62,6 +69,14 @@ def make_dirs(wsp):
 
 def check_workspace(wsp):
     """
+
+    Parameters
+    ----------
+    wsp: TemplateWorkspace
+
+    Returns
+    -------
+
     """
     error = False
     for key in REQUIRED_WORKSPACE_KEYS:
@@ -75,8 +90,14 @@ def check_workspace(wsp):
         sys.exit(1)
 
 
-def import_task_settings(task, wsp):
+def import_task_settings(wsp, task):
     """
+    Parameters
+    ----------
+    wsp: TemplateWorkspace
+
+    task: str
+
     """
     if 'tasks' not in wsp.params:
         logger.error('missing parameter config item: tasks')
@@ -84,7 +105,7 @@ def import_task_settings(task, wsp):
 
     tasks = wsp.params['tasks']
     if task in tasks:
-        logger.info('temporarily overriding workspace with task variables (task: {})'.format(task))
+        logger.debug('temporarily overriding workspace with task variables (task: {})'.format(task))
         wsp.params.update(tasks[task])
         wsp.params['job_task'] = task
         return wsp
@@ -98,7 +119,7 @@ def add_to_history(wsp, task, params):
 
     Parameters
     ----------
-    wsp: Workspace
+    wsp: TemplateWorkspace
     task: str
     params: dict
 
@@ -124,6 +145,8 @@ def add_to_history(wsp, task, params):
         if not exists:
             writer.writeheader()
         writer.writerow(params)
+
+    logger.info('added job to history file "{}"'.format(history_file))
 
 
 def argument_parser():
@@ -169,18 +192,18 @@ def main():
     try:
         if args.create_workspace:
             # create workspace and exit
-            wsp = Workspace(auto_create=True)
+            wsp = TemplateWorkspace(auto_create=True)
             logger.info('created new workspace at: {}'.format(wsp.root_dir))
             sys.exit()
         else:
             # create workspace and continue
-            wsp = Workspace()
+            wsp = TemplateWorkspace()
     except OSError as e:
         logger.error(str(e))
         sys.exit(1)
 
     # import task settings into the top-level namespace
-    import_task_settings(args.task, wsp)
+    import_task_settings(wsp, args.task)
 
     # check if all required workspace keys exist
     check_workspace(wsp)
@@ -191,9 +214,9 @@ def main():
     undefined = wsp.get_variables(templates=wsp.params['templates'].values())
     if args.print_vars:
         if not len(undefined):
-            logger.info('no variables found')
+            logger.info('no undefined variables')
         else:
-            logger.info('variables: {}'.format(', '.join(undefined)))
+            logger.info('variables for task "{}": {}'.format(args.task, ', '.join(undefined)))
         sys.exit(0)
 
     for var in undefined:
@@ -202,7 +225,7 @@ def main():
     wsp_args = vars(wsp_args)
 
     # initialize workspace variables with command line arguments
-    wsp.init_params(**wsp_args)
+    wsp.init_vars(**wsp_args)
 
     # create directories
     make_dirs(wsp)

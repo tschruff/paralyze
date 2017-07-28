@@ -1,5 +1,6 @@
-from .workspace import Workspace
+from .workspace import Workspace, TemplateWorkspace
 
 __all__ = [
-    "Workspace"
+    "Workspace",
+    "TemplateWorkspace"
 ]
