@@ -9,7 +9,7 @@ import re
 
 
 class Vector(np.ndarray, Parsable):
-    """ The Vector class represents a 3D vector.
+    """The Vector class represents a 3D vector.
 
     >>> v = Vector("<-inf, .45, 34.5>")
     Vector((-inf, 0.45, 34.5))
@@ -22,7 +22,7 @@ class Vector(np.ndarray, Parsable):
 
     Pattern = r"(?P<value><{0},{0},{0}>)".format(Parsable.Decimal)
 
-    def __new__(cls, value=0, dtype=np.float64):
+    def __new__(cls, value=0, dtype=None):
         if isinstance(value, str):
             value = ''.join(value.split())
             if re.match(Vector.Pattern, value):
@@ -36,7 +36,7 @@ class Vector(np.ndarray, Parsable):
         return np.asarray(value, dtype=dtype).view(cls)
 
     def __array_wrap__(self, out_arr, context=None):
-        if out_arr.ndim == 0:  # a single scalar
+        if out_arr.ndim == 0:  # out_arr is a scalar
             return out_arr.item()
         return np.ndarray.__array_wrap__(self, out_arr, context)
 
@@ -55,7 +55,7 @@ class Vector(np.ndarray, Parsable):
         return str(self)
 
     def __repr__(self):
-        return 'Vector(({},{},{}))'.format(self.x, self.y, self.z)
+        return 'Vector(value=({},{},{}), dtype={!r})'.format(self.x, self.y, self.z, self.dtype)
 
     @property
     def x(self):
@@ -114,7 +114,7 @@ class Vector(np.ndarray, Parsable):
         return np.arccos(np.clip(np.dot(self.normalized(), other.normalized()), -1.0, 1.0))
 
     def dist(self, other):
-        """ Returns the distance of *self* to *other*.
+        """Returns the distance of *self* to *other*.
 
         Parameters
         ----------
@@ -143,21 +143,18 @@ class Vector(np.ndarray, Parsable):
             Valid arguments are: x, y, and z.
 
         """
-        if "x" in kwargs:
-            self.x = kwargs["x"]
-        if "y" in kwargs:
-            self.y = kwargs["y"]
-        if "z" in kwargs:
-            self.z = kwargs["z"]
+        self.x = kwargs.get("x", self.x)
+        self.y = kwargs.get("y", self.y)
+        self.z = kwargs.get("z", self.z)
 
     @staticmethod
-    def x_axis():
-        return Vector((1, 0, 0))
+    def x_axis(dtype=np.float32):
+        return Vector((1, 0, 0), dtype=dtype)
 
     @staticmethod
-    def y_axis():
-        return Vector((0, 1, 0))
+    def y_axis(dtype=np.float32):
+        return Vector((0, 1, 0), dtype=dtype)
 
     @staticmethod
-    def z_axis():
-        return Vector((0, 0, 1))
+    def z_axis(dtype=np.float32):
+        return Vector((0, 0, 1), dtype=dtype)

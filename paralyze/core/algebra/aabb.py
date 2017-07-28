@@ -14,11 +14,10 @@ class AABB(np.ndarray, Parsable):
     # re pattern that matches a valid AABB object (whitespaces removed)
     Pattern = r"\[(?P<min_corner><{0},{0},{0}>),(?P<max_corner><{0},{0},{0}>)\]".format(Parsable.Decimal)
 
-    def __new__(cls, min_corner=0, max_corner=None, dtype=np.float32):
+    def __new__(cls, min_corner=0, max_corner=None, dtype=None):
         min_corner = Vector(min_corner, dtype=dtype)
         max_corner = Vector(max_corner, dtype=dtype) if max_corner is not None else min_corner
-        array = min_corner.tolist() + max_corner.tolist()
-        return np.asarray(array, dtype=dtype).view(cls)
+        return np.asarray(np.concatenate((min_corner, max_corner)), dtype=dtype).view(cls)
 
     def __array_wrap__(self, out_arr, context=None):
         if out_arr.ndim == 0:  # a single scalar
@@ -47,7 +46,7 @@ class AABB(np.ndarray, Parsable):
         self = self.merged(other)
 
     def __repr__(self):
-        return 'AABB({!r},{!r})'.format(self.min, self.max)
+        return 'AABB(min_corner={!r},max_corner={!r}, dtype={!r})'.format(self.min, self.max, self.dtype)
 
     def __str__(self):
         return '[{!s},{!s}]'.format(self.min, self.max)
@@ -215,7 +214,7 @@ class AABB(np.ndarray, Parsable):
         AABB:
             The new AABB that is the result of the merging.
         """
-        return AABB(np.minimum(self.min, other.min), np.maximum(self.max, other.max), self.dtype)
+        return AABB(np.minimum(self.min, other.min), np.maximum(self.max, other.max))
 
     def scaled(self, factor):
         return AABB(self.min * factor, self.max * factor)
