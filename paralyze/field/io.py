@@ -3,7 +3,7 @@ import sys
 from xml.etree import ElementTree
 
 import numpy as np
-from paralyze.core.io import vtk as vtk_utils
+from paralyze.utils.io import vtk as vtk_utils
 
 from paralyze.core.fields import io as field_io
 from paralyze.utils.io import xml as xml_utils

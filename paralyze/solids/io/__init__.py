@@ -1,7 +1,7 @@
-from .csb import CSBFile
+from .csb import CSB
 from .npy import save_spheres, load_spheres
 
 __all__ = [
-    "CSBFile",
+    "CSB",
     "save_spheres", "load_spheres"
 ]

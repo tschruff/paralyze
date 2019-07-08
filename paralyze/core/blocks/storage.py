@@ -32,7 +32,7 @@ class BlockStorage(object):
         self._ci = CellInterval()
 
     def __getstate__(self):
-        """ The __getstate__ member is called when the BlockStorage is send to other
+        """The __getstate__ member is called when the BlockStorage is send to other
         processes, i.e. when the *execute* member is called and copies of the BlockStorage are
         send to worker processes. To prevent unnecessary copies of block data on
         each worker process, we replace non-local blocks from the instance's
@@ -47,8 +47,8 @@ class BlockStorage(object):
     def __iter__(self):
         return iter(self._blocks)
 
-    def __getitem__(self, identifier):
-        return [block.get(identifier, None) for block in self._blocks]
+    def __getitem__(self, key):
+        return [block.get(key, None) for block in self._blocks]
 
     def __len__(self):
         return len(self._blocks)
@@ -81,8 +81,8 @@ class BlockStorage(object):
             return self._domain
         return self.block(block_id).domain
 
-    def has_data(self, identifier):
-        return identifier in self._ids
+    def has_data(self, key):
+        return key in self._ids
 
     def is_periodic(self, axis):
         return self._periodic[axis]
@@ -101,10 +101,6 @@ class BlockStorage(object):
 
     def resolution(self):
         return self._resolution
-
-    def root_block(self):
-        assert len(self._blocks) > 0
-        return self._blocks[0]
 
     def add_bodies(self, identifier, bodies):
         if self.has_data(identifier):

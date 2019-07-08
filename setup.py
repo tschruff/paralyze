@@ -65,7 +65,7 @@ setup(
     license='BSD',
     packages=['paralyze'],
 
-    install_requires=['numpy', 'jinja2', 'scipy', 'paramiko'],
+    install_requires=['numpy', 'jinja2', 'scipy', 'pyevtk', 'matplotlib'],
 
     # additional data will be installed relative to sys.prefix
     # list of (install_folder, [list_of_files_to_be_installed])

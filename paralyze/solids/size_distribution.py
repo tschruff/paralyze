@@ -27,7 +27,7 @@ class SizeDistribution(object):
             self._f = self.generate(kwargs['gm'], kwargs['gsd'], self._s)
 
         self._f = np.array(self._f, dtype=np.float64)
-        assert abs(1.0 - np.sum(self._f)) < self.EPSILON, 'Sum of fraction contents must be 1.0'
+        assert abs(1.0 - np.sum(self._f)) < self.EPSILON, 'Sum of fraction contents must be 1.0 not %f' % np.sum(self._f)
         assert len(self._s) == len(self._f), 'Sieves and passage/residue must have same size'
         assert self._f[-1] == 0.0, 'Largest sieve must not contain any grains'
 
@@ -180,7 +180,7 @@ class SizeDistribution(object):
     @staticmethod
     def generate(gm, gsd, sieves):
         # TODO: Implement generate method
-        return []
+        raise NotImplementedError()
 
     @staticmethod
     def from_sample(volumes, sizes, sieves):

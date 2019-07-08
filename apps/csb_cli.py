@@ -1,7 +1,6 @@
-from paralyze.core import AABB, CSBFile, Vector
-from paralyze.core import BodyStorage, Capsule, Cylinder, Plane, Sphere
-
-from progressbar import ProgressBar
+from paralyze.core import AABB, Vector
+from paralyze.core import Storage, Sphere
+from paralyze.solids.io import csb
 
 import logging
 import time
@@ -45,7 +44,7 @@ class Command(object):
         self.domain = None
 
     def load_bodies(self, args):
-        bodies = CSBFile.load(args.path, args.delimiter)
+        bodies = Storage(solids=csb.load(args.path, args.delimiter))
         num_bodies = len(bodies)
         if not num_bodies:
             self.log.error('No bodies to edit! Aborting ...'.format(args.path))
@@ -53,13 +52,13 @@ class Command(object):
         self.log.info('Loaded {:d} bodies from file {}'.format(num_bodies, args.path))
 
         # extract command line parameters
-        if args.domain_filter == None:
-            self.domain = bodies.domain()
+        if args.domain_filter is None:
+            self.domain = AABB.inf()
         else:
             self.domain = AABB.parse(args.domain_filter)
             if self.domain.is_empty():
                 self.log.error('Specified domain is empty! Aborting ...')
-                return BodyStorage()
+                return []
             # apply domain filter
             old_num_bodies = len(bodies)
             bodies = bodies.clipped(self.domain, args.strict)
@@ -153,7 +152,7 @@ class Slice(Command):
             slice_bodies = bodies.clipped(slice, args.strict)
             bodies -= slice_bodies
             filename = slice_file.format(axis=axes[axis], slice_min=slice.min[axis], slice_max=slice.max[axis])
-            CSBFile.save(filename, slice_bodies)
+            csb.save(filename, slice_bodies)
             self.log.info('Saved {:d} bodies to file {}'.format(len(slice_bodies), filename))
 
         return True
@@ -221,7 +220,7 @@ class Edit(Command):
             self.log.debug('Body space is {}'.format(bodies.aabb()))
 
         # save
-        CSBFile.save(args.out, bodies)
+        csb.save(args.out, bodies)
         self.log.info('Saved {:d} bodies to file {}'.format(len(bodies), args.out))
 
 

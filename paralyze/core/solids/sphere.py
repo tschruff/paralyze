@@ -54,7 +54,7 @@ def create_sphere(*args, dynamic=False, **kwargs):
 
 
 class Sphere(PSolid):
-    Length      = PSolid.Length + 1
+    Length = PSolid.Length + 1
     RadiusIndex = PSolid.Length
 
     def __init__(self, *args, **kwargs):
@@ -77,7 +77,7 @@ class Sphere(PSolid):
             self.update()
 
     def __repr__(self):
-        return 'Sphere(center={!s}, radius={!s})'.format(self.center, self.radius)
+        return 'Sphere(center={!r}, radius={!r})'.format(self.center, self.radius)
 
     def update_aabb(self):
         # we don't need to do Vector(self.radius) because numpy will take care

@@ -118,12 +118,15 @@ class AABB(np.ndarray, Parsable):
 
         Parameters
         ----------
-        item: AABB or Vector
-            The item to test whether it is contained in the AABB
+        item: array-like
+            If item is an array with shape (3,) it is treated as a position vector.
+            If item is an array with shape (6,) it is treated as an AABB. Further,
+            item may be an array of position vectors or AABBs, i.e. have the shape
+            (n, 3) or (n, 6) respectively.
 
         Returns
         -------
-        bool:
+        result: bool or array of booleans
             The result of the test
 
         Notes
@@ -147,11 +150,32 @@ class AABB(np.ndarray, Parsable):
         >>> domain.contains(domain)
         False
         """
-        if isinstance(item, AABB):
-            return (self.min <= item.min).all() and (item.max < self.max).all()
-        if not isinstance(item, Vector): # explicitly convert item to Vector
-            item = Vector(item)
-        return (self.min <= item).all() and (item < self.max).all()
+        shape = np.shape(item)
+        if len(shape) == 1:
+            if shape[0] == 3:
+                return self.contains_point(item)
+            if shape[0] == 6:
+                return self.contains_other(item)
+        if len(shape) == 2: # item is an array of AABBs or Vectors
+            if shape[1] == 3:
+                return self.contains_point(item)
+            if shape[2] == 6:
+                return self.contains_other(item)
+        raise TypeError("Unsupported item shape %r" % shape)
+
+    def contains_other(self, aabb):
+        shape = np.shape(aabb)
+        if len(shape) == 1:
+            return np.all(self.min <= aabb[:3]) and np.all(aabb[3:] < self.max)
+        if len(shape) == 2:
+            return np.all(self.min <= aabb[:, :3], axis=1) & np.all(aabb[:, 3:] < self.max, axis=1)
+
+    def contains_point(self, point):
+        shape = np.shape(point)
+        if len(shape) == 1:
+            return np.all(self.min <= point) and np.all(point < self.max)
+        if len(shape) == 2:
+            return np.all(self.min <= point, axis=1) & np.all(point < self.max, axis=1)
 
     def intersection(self, other):
         """Calculates and returns the intersect between this AABB instance and
@@ -327,3 +351,7 @@ class AABB(np.ndarray, Parsable):
                 self.min.y = kwargs["y_max"]
             if "z_max" in kwargs:
                 self.min.z = kwargs["z_max"]
+
+    @staticmethod
+    def inf(dtype=np.float64):
+        return AABB(-np.inf, np.inf, dtype=dtype)

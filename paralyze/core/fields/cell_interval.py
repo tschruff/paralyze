@@ -5,24 +5,19 @@ import numpy as np
 
 
 class CellInterval(Parsable):
-    """ Represents an *immutable* interval of cells within the given min and max cell
-    where the max cell is included!
-
+    """Represents an *immutable* interval of cells within the given min and max.
+    The min and max cells are included!
     """
 
     Pattern = r"\A\[(?P<min_cell>\({0},{0},{0}\))\.\.\.(?P<max_cell>\({0},{0},{0}\))\]\Z".format(Parsable.Integer)
 
     def __init__(self, min_cell=(0, 0, 0), max_cell=None):
-        if max_cell is None:
-            max_cell = min_cell
-
+        max_cell = max_cell or min_cell
         self._min = Cell(min_cell)
         self._max = Cell(max_cell)
 
-        assert self.is_valid(), '%s is not a valid cell interval' % self
-
     def __sub__(self, other):
-        """ Returns the set of cells that is the difference (in terms of set theory) between self and other.
+        """Returns the set of cells that is the difference (in terms of set theory) between self and other.
 
         :param other:
         :return:
@@ -79,16 +74,21 @@ class CellInterval(Parsable):
     def is_valid(self):
         return self.max[0] >= self.min[0] and self.max[1] >= self.min[1] and self.max[2] >= self.min[2]
 
+    def contains_cell(self, cell):
+        return (self.min <= cell).all() and (cell <= self.max).all()
+
+    def contains_other(self, other):
+        return self.contains_cell(item.min) and self.contains_cell(item.max)
+
     def contains(self, item):
         if isinstance(item, Cell):
-            return (self.min <= item).all() and (item <= self.max).all()
+            return self.contains_cell(item)
         if isinstance(item, CellInterval):
-            return self.contains(item.min) and self.contains(item.max)
+            return self.contains_other(item)
         raise TypeError('Unsupported type')
 
-    def extended(self, delta):
-        if not isinstance(delta, Cell):
-            delta = Cell(delta)
+    def expanded(self, delta):
+        delta = Cell(delta)
         return CellInterval(self.min - delta, self.max + delta)
 
     def intersection(self, other):
@@ -98,13 +98,32 @@ class CellInterval(Parsable):
 
     def intersects(self, other):
         assert isinstance(other, CellInterval)
-
         return other.max[0] > self.min[0] and other.min[0] < self.max[0] and \
                other.max[1] > self.min[1] and other.min[1] < self.max[1] and \
                other.max[2] > self.min[2] and other.min[2] < self.max[2]
 
-    def merged(self, other):
+    def union(self, other):
         return CellInterval(np.minimum(self.min, other.min), np.maximum(self.max, other.max))
 
     def shifted(self, cell):
         return CellInterval(self.min + cell, self.max + cell)
+
+    def slice(self, axis):
+        assert axis in [0, 1, 2]
+        return slice(self.min[axis], self.max[axis])
+
+    @property
+    def xslice(self):
+        return self.slice(0)
+
+    @property
+    def yslice(self):
+        return self.slice(1)
+
+    @property
+    def zslice(self):
+        return self.slice(2)
+
+    @property
+    def slices(self):
+        return self.xslice, self.yslice, self.zslice

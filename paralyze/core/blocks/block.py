@@ -10,23 +10,15 @@ class Block(object):
                must be consistent within a BlockStorage.
     """
 
-    def __init__(self, block_id, cell_interval, domain):
+    def __init__(self, block_id):
         self._id = block_id
         self._data = {}
 
-        self._ci = cell_interval
-        self._domain = domain
+    def __getitem__(self, key):
+        return self._data[key]
 
-    def __getitem__(self, identifier):
-        return self._data[identifier]
-
-    @property
-    def cell_interval(self):
-        return self._ci
-
-    @property
-    def domain(self):
-        return self._domain
+    def __setitem__(self, key, item):
+        self._data[key] = item
 
     @property
     def id(self):
@@ -34,22 +26,6 @@ class Block(object):
 
     def get(self, identifier, default=None):
         return self._data.get(identifier, default)
-
-    def add_field(self, identifier, dtype, ghost_level=0, init=0):
-        """Adds a new field with given parameters to the block.
-
-        Parameters
-        ----------
-        identifier:
-            Unique field identifier.
-        dtype: numpy.dtype
-            Numpy array dtype.
-        ghost_level: int (0, inf)
-            Number of ghost layers.
-        init: float or int
-            Initial field value.
-        """
-        self._data[identifier] = Field(self._ci.size, dtype, ghost_level, init)
 
     def add_bodies(self, identifier, bodies, remove_pure_locals=True):
         """

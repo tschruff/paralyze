@@ -6,11 +6,6 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from paralyze.utils import get_fitting_parameters
 
-import seaborn
-import inshore
-
-style = inshore.get('rwth-a5', 'thesis')
-seaborn.set(**style)
 mpl.rcParams['text.usetex'] = True
 
 # 2.2  2.35 2.4  2.15 2.45 2.15 2.4

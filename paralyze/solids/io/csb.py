@@ -1,74 +1,25 @@
 from paralyze.core.solids import Capsule, Cylinder, Sphere
-from paralyze.core.solids import create_capsule, create_cylinder, create_sphere
+from paralyze.core.solids import create_sphere
 from paralyze.core.algebra import Vector
 
 import os
-import logging
-import codecs
-
-logger = logging.getLogger(__name__)
+import warnings
 
 
 class CSB(object):
 
     SphereType = 1
-    BoxType = 2
-    CapsuleType = 3
-    CylinderType = 4
-    PlaneType = 5
-    TriangleMeshType = 6
-    UnionType = 7
-    EllipsoidType = 8
+    SupportedTypes = (SphereType, )
 
-    AllTypes = (
-        SphereType, BoxType, CapsuleType, CylinderType,
-        PlaneType, TriangleMeshType, UnionType, EllipsoidType
-    )
-
-    SupportedTypes = (SphereType, PlaneType)
+    # save methods
 
     @staticmethod
-    def get_type(solid):
-        """
-        Parameters
-        ----------
-        solid: Solid
-
-        Returns
-        -------
-        sid: int
-            The internal solid type id used to detect the type of solids, e.g.
-            sphere, cylinder, etc.
-        """
-        if isinstance(solid, Capsule):
-            return CSB.CapsuleType
-        if isinstance(solid, Cylinder):
-            return CSB.CylinderType
-        if isinstance(solid, Sphere):
-            return CSB.SphereType
-
-    @staticmethod
-    def get_data(solid):
-        c = solid.center
-        data = [CSB.get_type(solid), c[0], c[1], c[2]]
-        if isinstance(solid, Sphere):
-            data.append(solid.radius * 2.0)
-        else:
-            log.warning('CSB.get_data not implemented for solid or type {}'.format(type(solid)))
+    def get_data(sphere):
+        c = sphere.center
+        data = [c[0], c[1], c[2], sphere.radius * 2.0]
         return data
 
-    # parser methods
-
-    @staticmethod
-    def parse_solid(stype, line, dynamic, scale, offset, **kwargs):
-        if stype == CSB.CapsuleType:
-            return CSB._parse_capsule(line, dynamic, scale, offset, **kwargs)
-        if stype == CSB.CylinderType:
-            return CSB._parse_cylinder(line, dynamic, scale, offset, **kwargs)
-        if stype == CSB.SphereType:
-            return CSB._parse_sphere(line, dynamic, scale, offset, **kwargs)
-        elif stype == CSB.PlaneType:
-            return CSB._parse_plane(line, dynamic, scale, offset, **kwargs)
+    # load methods
 
     @staticmethod
     def parse_vector(data, scale=1.0, offset=Vector(0)):
@@ -76,32 +27,14 @@ class CSB(object):
         return Vector((float(data[0]), float(data[1]), float(data[2]))) * scale + offset
 
     @staticmethod
-    def parse_capsule(line, dynamic, scale, offset, **kwargs):
-        raise NotImplementedError()
-
-    @staticmethod
-    def parse_cylinder(line, dynamic, scale, offset, **kwargs):
-        raise NotImplementedError()
-
-    @staticmethod
     def parse_sphere(line, dynamic, scale, offset, **kwargs):
         assert int(line[0]) == CSB.SphereType
-        assert len(line) >= 5
+        assert len(line) == 5
 
-        center = CSB._parse_vector(line[1:4], scale, offset)
+        center = CSB.parse_vector(line[1:4], scale, offset)
         diameter = float(line[4]) * scale
 
         return create_sphere(center, radius=diameter/2, dynamic=dynamic, **kwargs)
-
-    @staticmethod
-    def parse_plane(line, dynamic, scale, offset, **kwargs):
-        assert int(line[0]) == CSB.PlaneType
-        assert len(line) >= 7
-
-        center = CSB._parse_vector(line[1:4], scale, offset)
-        normal = CSB._parse_vector(line[4:7])
-
-        return create_plane(center, normal=normal, dynamic=dynamic, **kwargs)
 
 
 # public interface members
@@ -157,13 +90,12 @@ def load(f, delimiter=',', linesep=os.linesep, encoding='utf-8',
         the ``filter`` argument.
     """
 
-    solids = set()
+    solids = []
 
     if isinstance(f, str):  # open/read/close if f is path-like
         path = f
-        f = codecs.open(path, 'r', encoding=encoding)
-        content = f.read()
-        f.close()
+        with open(path, 'r', encoding=encoding) as f:
+            content = f.read()
     else:  # explicit type testing
         path = str(f)
         content = f.read()
@@ -191,13 +123,14 @@ def load(f, delimiter=',', linesep=os.linesep, encoding='utf-8',
             raise OSError(err_str.format(line_num=i+1, path=path, line=line, msg=e.args[0]))
 
         if stype not in CSB.SupportedTypes:
-            logger.warn("Solid type %d is not supported by CSB. Skipping import." % stype)
+            warnings.warn("Solid type %d is not supported by CSB. Skipping import." % stype)
         else:
-            solid = CSB._parse_solid(stype, line, dynamic, scale, offset)
+            solid = CSB.parse_sphere(line, dynamic, scale, offset)
             if filter(solid):
-                solids.add(solid)
+                solids.append(solid)
 
     return solids
+
 
 def save(filename, solids, delimiter=',', linesep=os.linesep):
     with open(filename, 'w') as csb:

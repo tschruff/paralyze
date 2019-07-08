@@ -102,6 +102,24 @@ class ISolid(object):
         """
         raise NotImplementedError
 
+    @property
+    def x(self):
+        """Returns the x-coordinate of the solid's center.
+        """
+        return self.center.x
+
+    @property
+    def y(self):
+        """Returns the y-coordinate of the solid's center.
+        """
+        return self.center.y
+
+    @property
+    def z(self):
+        """Returns the z-coordinate of the solid's center.
+        """
+        return self.center.z
+
 
 class IDynamicSolid(ISolid):
 
@@ -201,9 +219,9 @@ class IDynamicSolid(ISolid):
 
 class PSolid(ISolid):
 
-    Length          = 13
-    AABBSlice       = slice(0, 6)
-    CenterSlice     = slice(6, 9)
+    Length = 13
+    AABBSlice = slice(0, 6)
+    CenterSlice = slice(6, 9)
     QuaternionSlice = slice(9, 13)
 
     def __init__(self, *args, **kwargs):
@@ -278,15 +296,15 @@ class PSolid(ISolid):
 
 class DynamicPSolid(IDynamicSolid, PSolid):
 
-    Length       = PSolid.Length + 13
+    Length = PSolid.Length + 13
     DensityIndex = PSolid.Length
-    ForceSlice   = slice(PSolid.Length+1 , PSolid.Length+4 )
-    TorqueSlice  = slice(PSolid.Length+4 , PSolid.Length+7 )
-    LinVelSlice  = slice(PSolid.Length+7 , PSolid.Length+10)
-    AngVelSlice  = slice(PSolid.Length+10, PSolid.Length+13)
+    ForceSlice = slice(PSolid.Length+1 , PSolid.Length+4 )
+    TorqueSlice = slice(PSolid.Length+4 , PSolid.Length+7 )
+    LinVelSlice = slice(PSolid.Length+7 , PSolid.Length+10)
+    AngVelSlice = slice(PSolid.Length+10, PSolid.Length+13)
     InertiaSlice = slice(PSolid.Length+13, PSolid.Length+22)
 
-    def __init__(self, reserve, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         density = kwargs.pop("density", 1.)
         force = kwargs.pop("force", 0)
         torque = kwargs.pop("torque", 0)

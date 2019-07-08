@@ -1,17 +1,44 @@
+from collections.abc import Set
+from paralyze.core import AABB, Vector
+
+import numpy as np
+
 
 class Solids(set):
-    """A set container that holds solid instances and takes care of merging
-    and splitting procedures.
-    """
-    pass
+
+    def __init__(self, solids=[]):
+        set.__init__(self, solids)
+
+    def __getitem__(self, key):
+        # TODO: Implement []-operator to return solid attributes (e.g. x, y, mass, velocity, etc.)
+        pass
+
+    @property
+    def aabb(self):
+        """TODO: precompute to be more efficient.
+        """
+        min_x = np.inf
+        min_y = np.inf
+        min_z = np.inf
+        max_x = -np.inf
+        max_y = -np.inf
+        max_z = -np.inf
+        for solid in self:
+            center = solid.center
+            min_x = min(min_x, center.x)
+            min_y = min(min_y, center.y)
+            min_z = min(min_z, center.z)
+            max_x = max(max_x, center.x)
+            max_y = max(max_y, center.y)
+            max_z = max(max_z, center.z)
+        return AABB((min_x, min_y, min_z), (max_x, max_y, max_z))
 
 
 class Storage(object):
 
-    def __init__(self, domain=None, solids=()):
+    def __init__(self, domain=AABB.inf(), solids=()):
         self._domain = domain
-        self._locals = Solids()
-        self._shadows = Solids()
+        self._solids = Solids([])
         self.add(solids)
 
     def __and__(self, other):
@@ -26,17 +53,18 @@ class Storage(object):
     def __ior__(self, other):
         self = self.merged(other)
 
+    def __len__(self):
+        return len(self._solids)
+
     def add(self, solids):
         """Add all solids to either the local or shadow storage.
         """
         for solid in solids:
-            if self.is_local(solid):
-                self._locals.add(solid)
-            if self.is_shadow(solid):
-                self._shadows.add(solid)
+            if self.domain.contains(solid.center):
+                self._solids.add(solid)
 
     def clipped(self, domain):
-        """Returns an iterator of the subset of solids that are inside the
+        """Returns the subset of solids that are inside the
         specified ``domain``.
 
         Parameters
@@ -50,7 +78,7 @@ class Storage(object):
             The subset of bodies that is inside the specified `domain`.
         """
         if domain.contains(self.domain):
-            return self.iter_solids()
+            return self.solids
         return filter(lambda solid: self.is_local(solid, domain) or self.is_shadow(solid, domain), self.solids)
 
     @property
@@ -69,34 +97,20 @@ class Storage(object):
         """
         return Storage(self.domain & other.domain, self.solids | other.solids)
 
-    def is_local(self, solid, domain=None):
-        domain = domain or self._domain
-        return domain.contains(solid.center)
-
-    def is_shadow(self, solid, domain=None):
-        domain = domain or self._domain
-        return domain.intersects(solid.aabb)
-
     def iter_solids(self):
-        return iter(self._locals | self._shadows)
-
-    def iter_locals(self):
-        return iter(self._locals)
-
-    def iter_shadows(self):
-        return iter(self._shadows)
+        return iter(self._solids)
 
     def merged(self, other):
         """Merges ``other`` storage and ``self``.
         """
-        return Storage(self._domain | other.domain, self.solids | other.solids)
+        return Storage(self.domain | other.domain, self.solids | other.solids)
 
     def remove(self, solid):
         pass
 
     @property
     def solids(self):
-        return self._locals | self._shadows
+        return self._solids
 
     def split(self, domains, strict=False):
         storages = []
